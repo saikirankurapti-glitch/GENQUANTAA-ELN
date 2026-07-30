@@ -1,0 +1,55 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-blue: #2563EB;
+  --color-brand-blueHover: #1D4ED8;
+  --color-brand-teal: #14B8A6;
+  --color-brand-emerald: #10B981;
+  --color-brand-indigo: #6366F1;
+  --color-brand-slate: #64748B;
+  --color-brand-bg: #F8FAFC;
+  --color-brand-surface: #FFFFFF;
+  --color-brand-darkSidebar: #0F172A;
+  --color-brand-border: #E2E8F0;
+  --font-sans: "Inter", sans-serif;
+  --font-mono: "Fira Code", "Courier New", monospace;
+}
+
+body {
+  background-color: #f8fafc;
+  color: #1e293b;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom scrollbars for lab data tables and code/sequence viewers */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Custom sequence nucleotide highlights */
+.nucleotide-A { background-color: #fee2e2; color: #dc2626; font-weight: 600; }
+.nucleotide-T { background-color: #dbeafe; color: #2563eb; font-weight: 600; }
+.nucleotide-C { background-color: #dcfce7; color: #16a34a; font-weight: 600; }
+.nucleotide-G { background-color: #fef3c7; color: #d97706; font-weight: 600; }
+
+/* Force dark background on browser autofilled input fields */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-text-fill-color: #ffffff !important;
+  -webkit-box-shadow: 0 0 0px 1000px #020617 inset !important;
+  transition: background-color 5000s ease-in-out 0s !important;
+}
