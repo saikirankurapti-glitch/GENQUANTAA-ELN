@@ -118,11 +118,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSaveUser }) => {
               onChange={(e) => setRole(e.target.value)}
               className="w-full border border-slate-200 rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-blue-500 cursor-pointer"
             >
-              <option value="Scientist">Scientist</option>
-              <option value="Lab Technician">Lab Technician</option>
-              <option value="PI / Manager">PI / Manager</option>
-              <option value="Bioinformatician">Bioinformatician</option>
               <option value="Admin">Admin</option>
+              <option value="PI">PI (Project Owner / Lab Manager)</option>
+              <option value="Researcher">Researcher</option>
+              <option value="Bioinformatician">Bioinformatician</option>
+              <option value="QA">QA (Quality Assurance)</option>
+              <option value="Viewer">Viewer (Read Only)</option>
+              <option value="Lab Technician">Lab Technician</option>
             </select>
           </div>
 

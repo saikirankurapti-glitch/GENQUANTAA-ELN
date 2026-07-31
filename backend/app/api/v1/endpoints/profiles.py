@@ -49,10 +49,12 @@ async def update_my_profile(
     current_tenant: Tenant = Depends(get_current_tenant),
 ) -> Any:
     """Update profile details for currently logged-in user."""
-    updated_user = await user_service.update_profile(
+    from app.crud.crud_identity import user_profile_repo
+    await user_service.update_profile(
         db, user_id=current_user.id, tenant_id=current_tenant.id, obj_in=profile_in
     )
-    return updated_user.profile
+    profile = await user_profile_repo.get_by_user_id(db, user_id=current_user.id)
+    return profile
 
 
 @router.get("/{user_id}", response_model=UserProfileRead, summary="Get User Profile by ID")

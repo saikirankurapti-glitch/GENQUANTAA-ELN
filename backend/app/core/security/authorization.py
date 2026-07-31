@@ -57,19 +57,34 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    user = None
     try:
-        session = await session_service.validate_session(db, raw_session_token=token)
-        user = await user_service.get_user_by_id(
-            db, id=session.user_id, tenant_id=session.user.tenant_id if hasattr(session, "user") and session.user else None
-        )
-    except (SessionNotFound, SessionExpired) as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(e),
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        from app.core.security.jwt import decode_access_token
+        jwt_payload = decode_access_token(token)
+        if jwt_payload and "user_id" in jwt_payload:
+            user_id = UUID(jwt_payload["user_id"])
+            tenant_id = UUID(jwt_payload["tenant_id"]) if jwt_payload.get("tenant_id") else None
+            user = await user_service.get_user_by_id(db, id=user_id, tenant_id=tenant_id, include_relations=True)
+        else:
+            session = await session_service.validate_session(db, raw_session_token=token)
+            user = await user_service.get_user_by_id(
+                db, id=session.user_id, tenant_id=session.user.tenant_id if hasattr(session, "user") and session.user else None, include_relations=True
+            )
     except Exception as e:
-        logger.error(f"Authentication error: {e}")
+        logger.warning(f"JWT/Session validation failed, trying fallback: {e}")
+        try:
+            session = await session_service.validate_session(db, raw_session_token=token)
+            user = await user_service.get_user_by_id(
+                db, id=session.user_id, tenant_id=session.user.tenant_id if hasattr(session, "user") and session.user else None, include_relations=True
+            )
+        except (SessionNotFound, SessionExpired) as e_sess:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Could not validate JWT or session credentials.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+    if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials.",

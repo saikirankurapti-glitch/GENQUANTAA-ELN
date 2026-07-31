@@ -130,7 +130,7 @@ class AuthenticationService:
         if user.must_change_password:
             raise MustChangePassword("Password reset required prior to access.")
 
-        # 8. Issue Refresh Token & Session
+        # 8. Issue Refresh Token & JWT Access Token
         refresh_token_obj, raw_refresh_token = await refresh_token_service.issue_refresh_token(
             db, user_id=user.id, device_name=credentials.device_name, ip_address=ip_address
         )
@@ -144,6 +144,18 @@ class AuthenticationService:
             user_agent=user_agent,
         )
 
+        from app.crud.crud_identity import user_profile_repo
+        from app.core.security.jwt import create_access_token
+        user_prof = await user_profile_repo.get_by_user_id(db, user_id=user.id)
+        role = user_prof.designation if user_prof and user_prof.designation else "Researcher"
+        jwt_access_token = create_access_token(
+            user_id=str(user.id),
+            tenant_id=str(user.tenant_id),
+            organization_id=str(user.organization_id) if user.organization_id else None,
+            role=role,
+            permissions=[],
+        )
+
         # 9. Audit log success
         await login_history_repo.create(
             db,
@@ -154,7 +166,7 @@ class AuthenticationService:
         )
 
         logger.info(f"AuthenticationService: User '{user.username}' successfully authenticated.")
-        return user, raw_session_token, raw_refresh_token
+        return user, jwt_access_token, raw_refresh_token
 
     async def logout(self, db: AsyncSession, *, raw_session_token: str) -> bool:
         """Logout user by validating and revoking active session."""
