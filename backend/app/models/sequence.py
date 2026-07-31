@@ -1,45 +1,61 @@
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
-import uuid
+from pydantic import Field
+from beanie import Document
 from uuid import UUID, uuid4
-from sqlalchemy import String, Boolean, Text, Integer, ForeignKey, Uuid, JSON
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-from app.db.base_class import Base
-from app.db.mixins import UUIDMixin, TimestampMixin, TenantMixin, SoftDeleteMixin
 
-class Sequence(Base, UUIDMixin, TimestampMixin, TenantMixin, SoftDeleteMixin):
-    __tablename__ = "sequences"
+class Sequence(Document):
+    id: UUID = Field(default_factory=uuid4)
+    tenant_id: UUID
+    experiment_id: Optional[UUID] = None
+    sample_id: Optional[UUID] = None
+    name: str
+    sequence_type: str = "DNA"
+    sequence_data: str
+    length: int = 0
+    status: str = "active"
+    gc_content: float = 0.0
+    is_deleted: bool = False
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
-    sequence_type: Mapped[str] = mapped_column(String(32), nullable=False) # DNA, RNA, AMINO
-    sequence_data: Mapped[str] = mapped_column(Text, nullable=False)
-    length: Mapped[int] = mapped_column(Integer, nullable=False)
+    class Settings:
+        name = "sequences"
 
-class SequenceVersion(Base, UUIDMixin, TimestampMixin, TenantMixin):
-    __tablename__ = "sequence_versions"
+class SequenceVersion(Document):
+    id: UUID = Field(default_factory=uuid4)
+    sequence_id: UUID
+    version: int
+    sequence_data: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    sequence_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("sequences.id", ondelete="CASCADE"), nullable=False)
-    version: Mapped[int] = mapped_column(Integer, nullable=False)
-    sequence_data: Mapped[str] = mapped_column(Text, nullable=False)
+    class Settings:
+        name = "sequence_versions"
 
-class SequenceAnnotation(Base, UUIDMixin, TimestampMixin, TenantMixin):
-    __tablename__ = "sequence_annotations"
+class SequenceAnnotation(Document):
+    id: UUID = Field(default_factory=uuid4)
+    sequence_id: UUID
+    label: str
+    start_pos: int
+    end_pos: int
 
-    sequence_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("sequences.id", ondelete="CASCADE"), nullable=False)
-    label: Mapped[str] = mapped_column(String(128), nullable=False)
-    start_pos: Mapped[int] = mapped_column(Integer, nullable=False)
-    end_pos: Mapped[int] = mapped_column(Integer, nullable=False)
+    class Settings:
+        name = "sequence_annotations"
 
-class SequenceAttachment(Base, UUIDMixin, TimestampMixin, TenantMixin):
-    __tablename__ = "sequence_attachments"
+class SequenceAttachment(Document):
+    id: UUID = Field(default_factory=uuid4)
+    sequence_id: UUID
+    file_name: str
+    file_path: str
 
-    sequence_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("sequences.id", ondelete="CASCADE"), nullable=False)
-    file_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    file_path: Mapped[str] = mapped_column(String(512), nullable=False)
+    class Settings:
+        name = "sequence_attachments"
 
-class SequenceAnalysisResult(Base, UUIDMixin, TimestampMixin, TenantMixin):
-    __tablename__ = "sequence_analysis_results"
+class SequenceAnalysisResult(Document):
+    id: UUID = Field(default_factory=uuid4)
+    sequence_id: UUID
+    analysis_type: str
+    result_data: Dict[str, Any] = Field(default_factory=dict)
 
-    sequence_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("sequences.id", ondelete="CASCADE"), nullable=False)
-    analysis_type: Mapped[str] = mapped_column(String(64), nullable=False)
-    result_data: Mapped[dict] = mapped_column(JSON, nullable=False)
+    class Settings:
+        name = "sequence_analysis_results"

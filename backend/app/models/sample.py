@@ -1,52 +1,78 @@
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
-import uuid
+from pydantic import Field
+from beanie import Document
 from uuid import UUID, uuid4
-from sqlalchemy import String, Boolean, Float, ForeignKey, Uuid, JSON
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-from app.db.base_class import Base
-from app.db.mixins import UUIDMixin, TimestampMixin, TenantMixin, SoftDeleteMixin
 
-class SampleType(Base, UUIDMixin, TimestampMixin, TenantMixin):
-    __tablename__ = "sample_types"
+class SampleType(Document):
+    id: UUID = Field(default_factory=uuid4)
+    tenant_id: UUID
+    name: str
+    description: Optional[str] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    name: Mapped[str] = mapped_column(String(128), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    class Settings:
+        name = "sample_types"
 
-class SampleStorageLocation(Base, UUIDMixin, TimestampMixin, TenantMixin):
-    __tablename__ = "sample_storage_locations"
+class SampleStorageLocation(Document):
+    id: UUID = Field(default_factory=uuid4)
+    tenant_id: UUID
+    name: str
+    freezer_unit: Optional[str] = None
+    shelf: Optional[str] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    name: Mapped[str] = mapped_column(String(128), nullable=False)
-    freezer_unit: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
-    shelf: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    class Settings:
+        name = "sample_storage_locations"
 
-class Sample(Base, UUIDMixin, TimestampMixin, TenantMixin, SoftDeleteMixin):
-    __tablename__ = "samples"
+class Sample(Document):
+    id: UUID = Field(default_factory=uuid4)
+    tenant_id: UUID
+    experiment_id: Optional[UUID] = None
+    sample_type_id: Optional[UUID] = None
+    location_id: Optional[UUID] = None
+    owner_id: Optional[UUID] = None
+    name: str
+    sample_code: str
+    barcode: Optional[str] = None
+    status: str = "available"
+    quantity: float = 1.0
+    unit: str = "mL"
+    metadata_json: Dict[str, Any] = Field(default_factory=dict)
+    is_deleted: bool = False
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
-    sample_code: Mapped[str] = mapped_column(String(64), nullable=False)
-    sample_type_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("sample_types.id", ondelete="RESTRICT"), nullable=False)
-    location_id: Mapped[Optional[UUID]] = mapped_column(Uuid(as_uuid=True), ForeignKey("sample_storage_locations.id", ondelete="SET NULL"), nullable=True)
-    quantity: Mapped[float] = mapped_column(Float, default=1.0, nullable=False)
-    unit: Mapped[str] = mapped_column(String(32), default="mL", nullable=False)
+    class Settings:
+        name = "samples"
 
-class SampleChainOfCustody(Base, UUIDMixin, TimestampMixin, TenantMixin):
-    __tablename__ = "sample_chain_of_custody"
+class SampleChainOfCustody(Document):
+    id: UUID = Field(default_factory=uuid4)
+    sample_id: UUID
+    user_id: UUID
+    action: str
+    notes: Optional[str] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    sample_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("samples.id", ondelete="CASCADE"), nullable=False)
-    user_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
-    action: Mapped[str] = mapped_column(String(64), nullable=False)
+    class Settings:
+        name = "sample_chain_of_custody"
 
-class SampleAttachment(Base, UUIDMixin, TimestampMixin, TenantMixin):
-    __tablename__ = "sample_attachments"
+class SampleAttachment(Document):
+    id: UUID = Field(default_factory=uuid4)
+    sample_id: UUID
+    file_name: str
+    file_path: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    sample_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("samples.id", ondelete="CASCADE"), nullable=False)
-    file_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    file_path: Mapped[str] = mapped_column(String(512), nullable=False)
+    class Settings:
+        name = "sample_attachments"
 
-class SampleAliquot(Base, UUIDMixin, TimestampMixin, TenantMixin):
-    __tablename__ = "sample_aliquots"
+class SampleAliquot(Document):
+    id: UUID = Field(default_factory=uuid4)
+    parent_sample_id: UUID
+    aliquot_code: str
+    quantity: float
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    parent_sample_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("samples.id", ondelete="CASCADE"), nullable=False)
-    aliquot_code: Mapped[str] = mapped_column(String(64), nullable=False)
-    quantity: Mapped[float] = mapped_column(Float, nullable=False)
+    class Settings:
+        name = "sample_aliquots"

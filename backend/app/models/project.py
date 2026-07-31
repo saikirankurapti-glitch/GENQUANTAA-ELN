@@ -1,34 +1,46 @@
 from typing import Optional, List
 from datetime import datetime, timezone
-import uuid
+from pydantic import Field
+from beanie import Document
 from uuid import UUID, uuid4
-from sqlalchemy import String, Boolean, ForeignKey, Uuid, DateTime
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-from app.db.base_class import Base
-from app.db.mixins import UUIDMixin, TimestampMixin, TenantMixin, SoftDeleteMixin
 from app.db.enums import ProjectStatus
 
-class Project(Base, UUIDMixin, TimestampMixin, TenantMixin, SoftDeleteMixin):
-    __tablename__ = "projects"
+class Project(Document):
+    id: UUID = Field(default_factory=uuid4)
+    tenant_id: UUID
+    owner_id: UUID
+    name: str
+    code: str = ""
+    description: Optional[str] = None
+    status: ProjectStatus = ProjectStatus.PLANNED
+    priority: str = "MEDIUM"
+    is_archived: bool = False
+    is_deleted: bool = False
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
-    code: Mapped[str] = mapped_column(String(64), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(String(1024), nullable=True)
-    status: Mapped[ProjectStatus] = mapped_column(default=ProjectStatus.PLANNED, nullable=False)
-    owner_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
-    start_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    end_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    class Settings:
+        name = "projects"
 
-class ProjectCollaborator(Base, UUIDMixin, TimestampMixin, TenantMixin):
-    __tablename__ = "project_collaborators"
+class ProjectCollaborator(Document):
+    id: UUID = Field(default_factory=uuid4)
+    project_id: UUID
+    user_id: UUID
+    role: str = "collaborator"
+    tenant_id: UUID
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    project_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
-    user_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    role: Mapped[str] = mapped_column(String(64), default="collaborator", nullable=False)
+    class Settings:
+        name = "project_collaborators"
 
-class ProjectAttachment(Base, UUIDMixin, TimestampMixin, TenantMixin):
-    __tablename__ = "project_attachments"
+class ProjectAttachment(Document):
+    id: UUID = Field(default_factory=uuid4)
+    project_id: UUID
+    file_name: str
+    file_path: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    project_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
-    file_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    file_path: Mapped[str] = mapped_column(String(512), nullable=False)
+    class Settings:
+        name = "project_attachments"

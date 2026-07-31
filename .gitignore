@@ -5,6 +5,7 @@ dist-ssr/
 *.local
 
 # Python / Backend
+.env
 venv/
 .venv/
 env/

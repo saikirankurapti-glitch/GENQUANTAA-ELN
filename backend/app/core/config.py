@@ -8,6 +8,7 @@ class Settings(BaseSettings):
 
     MONGODB_URL: str = "mongodb://localhost:27017"
     MONGODB_DB_NAME: str = "eln_db"
+    GROQ_API_KEY: Optional[str] = None
 
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
 

@@ -1,33 +1,59 @@
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
-import uuid
+from pydantic import Field
+from beanie import Document
 from uuid import UUID, uuid4
-from sqlalchemy import String, Boolean, ForeignKey, Uuid, DateTime
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-from app.db.base_class import Base
-from app.db.mixins import UUIDMixin, TimestampMixin, TenantMixin, SoftDeleteMixin
 from app.db.enums import ExperimentStatus
 
-class Experiment(Base, UUIDMixin, TimestampMixin, TenantMixin, SoftDeleteMixin):
-    __tablename__ = "experiments"
+class Experiment(Document):
+    id: UUID = Field(default_factory=uuid4)
+    tenant_id: UUID
+    organization_id: Optional[UUID] = None
+    project_id: UUID
+    owner_id: Optional[UUID] = None
+    reviewer_id: Optional[UUID] = None
+    protocol_id: Optional[UUID] = None
+    experiment_code: str
+    title: str
+    objective: Optional[str] = None
+    hypothesis: Optional[str] = None
+    description: Optional[str] = None
+    status: ExperimentStatus = ExperimentStatus.DRAFT
+    priority: str = "MEDIUM"
+    metadata_json: Dict[str, Any] = Field(default_factory=dict)
+    is_archived: bool = False
+    is_deleted: bool = False
+    start_date: Optional[datetime] = None
+    planned_end_date: Optional[datetime] = None
+    completed_date: Optional[datetime] = None
+    reviewed_date: Optional[datetime] = None
+    archived_at: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    title: Mapped[str] = mapped_column(String(255), nullable=False)
-    experiment_number: Mapped[str] = mapped_column(String(64), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(String(2048), nullable=True)
-    status: Mapped[ExperimentStatus] = mapped_column(default=ExperimentStatus.DRAFT, nullable=False)
-    project_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
-    owner_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    class Settings:
+        name = "experiments"
 
-class ExperimentCollaborator(Base, UUIDMixin, TimestampMixin, TenantMixin):
-    __tablename__ = "experiment_collaborators"
+class ExperimentCollaborator(Document):
+    id: UUID = Field(default_factory=uuid4)
+    experiment_id: UUID
+    user_id: UUID
+    role: str = "collaborator"
+    tenant_id: UUID
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    experiment_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("experiments.id", ondelete="CASCADE"), nullable=False)
-    user_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    role: Mapped[str] = mapped_column(String(64), default="collaborator", nullable=False)
+    class Settings:
+        name = "experiment_collaborators"
 
-class ExperimentAttachment(Base, UUIDMixin, TimestampMixin, TenantMixin):
-    __tablename__ = "experiment_attachments"
+class ExperimentAttachment(Document):
+    id: UUID = Field(default_factory=uuid4)
+    experiment_id: UUID
+    file_name: str
+    file_path: str
+    file_size: int = 0
+    mime_type: Optional[str] = None
+    uploaded_by: Optional[UUID] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    experiment_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("experiments.id", ondelete="CASCADE"), nullable=False)
-    file_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    file_path: Mapped[str] = mapped_column(String(512), nullable=False)
+    class Settings:
+        name = "experiment_attachments"

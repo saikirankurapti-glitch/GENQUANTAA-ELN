@@ -61,23 +61,30 @@ class ProjectService:
         self, db: AsyncSession, *, obj_in: ProjectCreate, tenant_id: UUID, current_user: User
     ) -> Project:
         """Create a new project ensuring code uniqueness."""
-        existing = await project_repo.get_by_code(db, project_code=obj_in.project_code, tenant_id=tenant_id)
+        code = getattr(obj_in, "code", getattr(obj_in, "project_code", "PRJ-001"))
+        name = getattr(obj_in, "name", getattr(obj_in, "title", "New Project"))
+        existing = await Project.find_one({"code": code, "tenant_id": tenant_id, "is_deleted": False})
         if existing:
-            raise DuplicateProjectCode(f"Project code '{obj_in.project_code}' already exists in this tenant.")
+            raise DuplicateProjectCode(f"Project code '{code}' already exists in this tenant.")
 
-        project = await project_repo.create(
-            db, obj_in=obj_in, tenant_id=tenant_id, current_user_id=current_user.id
+        project = Project(
+            tenant_id=tenant_id,
+            owner_id=current_user.id,
+            name=name,
+            code=code,
+            description=obj_in.description,
+            status=getattr(obj_in, "status", ProjectStatus.PLANNED),
+            priority=getattr(obj_in, "priority", "MEDIUM"),
         )
-        logger.info(f"ProjectService: Created project '{project.project_code}' (ID: {project.id})")
+        await project.insert()
+        logger.info(f"ProjectService: Created project '{project.code}' (ID: {project.id})")
         return project
 
     async def get_project(
         self, db: AsyncSession, *, project_id: UUID, tenant_id: UUID, include_details: bool = True
     ) -> Project:
         """Fetch project by ID or raise ProjectNotFound."""
-        project = await project_repo.get_by_id(
-            db, id=project_id, tenant_id=tenant_id, include_details=include_details
-        )
+        project = await Project.find_one({"_id": project_id, "tenant_id": tenant_id, "is_deleted": False})
         if not project:
             raise ProjectNotFound(f"Project {project_id} not found.")
         return project
@@ -99,11 +106,17 @@ class ProjectService:
         if obj_in.status and obj_in.status != project.status:
             self.validate_status_transition(project.status, obj_in.status)
 
-        updated_project = await project_repo.update(
-            db, db_obj=project, obj_in=obj_in, current_user_id=current_user.id
-        )
+        if obj_in.title or getattr(obj_in, "name", None):
+            project.name = obj_in.title or getattr(obj_in, "name", project.name)
+        if obj_in.description is not None:
+            project.description = obj_in.description
+        if obj_in.status is not None:
+            project.status = obj_in.status
+
+        project.updated_at = datetime.now(timezone.utc)
+        await project.save()
         logger.info(f"ProjectService: Updated project {project_id}")
-        return updated_project
+        return project
 
     async def archive_project(
         self, db: AsyncSession, *, project_id: UUID, tenant_id: UUID, current_user: User
@@ -113,11 +126,11 @@ class ProjectService:
         if project.is_archived:
             return project
 
-        archived = await project_repo.archive(
-            db, project_id=project_id, tenant_id=tenant_id, current_user_id=current_user.id
-        )
+        project.is_archived = True
+        project.updated_at = datetime.now(timezone.utc)
+        await project.save()
         logger.info(f"ProjectService: Archived project {project_id}")
-        return archived
+        return project
 
     async def restore_project(
         self, db: AsyncSession, *, project_id: UUID, tenant_id: UUID, current_user: User
@@ -127,21 +140,20 @@ class ProjectService:
         if not project.is_archived:
             return project
 
-        restored = await project_repo.restore(
-            db, project_id=project_id, tenant_id=tenant_id, current_user_id=current_user.id
-        )
+        project.is_archived = False
+        project.updated_at = datetime.now(timezone.utc)
+        await project.save()
         logger.info(f"ProjectService: Restored project {project_id}")
-        return restored
+        return project
 
     async def delete_project(
         self, db: AsyncSession, *, project_id: UUID, tenant_id: UUID, current_user: User
     ) -> bool:
         """Soft delete a project."""
-        success = await project_repo.soft_delete(
-            db, id=project_id, tenant_id=tenant_id, current_user_id=current_user.id
-        )
-        if not success:
-            raise ProjectNotFound(f"Project {project_id} not found.")
+        project = await self.get_project(db, project_id=project_id, tenant_id=tenant_id)
+        project.is_deleted = True
+        project.updated_at = datetime.now(timezone.utc)
+        await project.save()
         logger.info(f"ProjectService: Soft deleted project {project_id}")
         return True
 
@@ -154,9 +166,14 @@ class ProjectService:
         pagination: ProjectPagination
     ) -> Tuple[List[Project], int]:
         """List projects with filtering and pagination."""
-        return await project_repo.list_projects(
-            db, tenant_id=tenant_id, filter_params=filter_params, pagination=pagination
-        )
+        query = {"tenant_id": tenant_id, "is_deleted": False}
+        if filter_params and filter_params.search:
+            query["name"] = {"$regex": filter_params.search, "$options": "i"}
+        total = await Project.find(query).count()
+        skip = (pagination.page - 1) * pagination.page_size
+        items = await Project.find(query).skip(skip).limit(pagination.page_size).to_list()
+        return items, total
+
 
     async def add_collaborator(
         self,

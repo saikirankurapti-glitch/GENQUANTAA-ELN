@@ -1,45 +1,60 @@
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
-import uuid
+from pydantic import Field
+from beanie import Document
 from uuid import UUID, uuid4
-from sqlalchemy import String, Boolean, Integer, Text, ForeignKey, Uuid, JSON
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-from app.db.base_class import Base
-from app.db.mixins import UUIDMixin, TimestampMixin, TenantMixin, SoftDeleteMixin
 
-class NotebookEntry(Base, UUIDMixin, TimestampMixin, TenantMixin, SoftDeleteMixin):
-    __tablename__ = "notebook_entries"
+class NotebookEntry(Document):
+    id: UUID = Field(default_factory=uuid4)
+    tenant_id: UUID
+    experiment_id: Optional[UUID] = None
+    author_id: Optional[UUID] = None
+    title: str
+    content: Optional[str] = None
+    entry_type: str = "text"
+    version: int = 1
+    is_deleted: bool = False
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    title: Mapped[str] = mapped_column(String(255), nullable=False)
-    content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    experiment_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("experiments.id", ondelete="CASCADE"), nullable=False)
-    author_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
-    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    class Settings:
+        name = "notebook_entries"
 
-class NotebookEntryVersion(Base, UUIDMixin, TimestampMixin, TenantMixin):
-    __tablename__ = "notebook_entry_versions"
+class NotebookEntryVersion(Document):
+    id: UUID = Field(default_factory=uuid4)
+    entry_id: UUID
+    version: int
+    title: str
+    content: Optional[str] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    entry_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("notebook_entries.id", ondelete="CASCADE"), nullable=False)
-    version: Mapped[int] = mapped_column(Integer, nullable=False)
-    title: Mapped[str] = mapped_column(String(255), nullable=False)
-    content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    class Settings:
+        name = "notebook_entry_versions"
 
-class NotebookAttachment(Base, UUIDMixin, TimestampMixin, TenantMixin):
-    __tablename__ = "notebook_attachments"
+class NotebookAttachment(Document):
+    id: UUID = Field(default_factory=uuid4)
+    entry_id: UUID
+    file_name: str
+    file_path: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    entry_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("notebook_entries.id", ondelete="CASCADE"), nullable=False)
-    file_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    file_path: Mapped[str] = mapped_column(String(512), nullable=False)
+    class Settings:
+        name = "notebook_attachments"
 
-class NotebookComment(Base, UUIDMixin, TimestampMixin, TenantMixin):
-    __tablename__ = "notebook_comments"
+class NotebookComment(Document):
+    id: UUID = Field(default_factory=uuid4)
+    entry_id: UUID
+    author_id: UUID
+    comment: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    entry_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("notebook_entries.id", ondelete="CASCADE"), nullable=False)
-    author_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    comment: Mapped[str] = mapped_column(Text, nullable=False)
+    class Settings:
+        name = "notebook_comments"
 
-class NotebookTag(Base, UUIDMixin, TimestampMixin, TenantMixin):
-    __tablename__ = "notebook_tags"
+class NotebookTag(Document):
+    id: UUID = Field(default_factory=uuid4)
+    entry_id: UUID
+    tag: str
 
-    entry_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("notebook_entries.id", ondelete="CASCADE"), nullable=False)
-    tag: Mapped[str] = mapped_column(String(64), nullable=False)
+    class Settings:
+        name = "notebook_tags"

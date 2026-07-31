@@ -1,61 +1,84 @@
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
-import uuid
+from pydantic import Field
+from beanie import Document
 from uuid import UUID, uuid4
-from sqlalchemy import String, Boolean, DateTime, ForeignKey, Uuid
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-from app.db.base_class import Base
-from app.db.mixins import UUIDMixin, TimestampMixin, TenantMixin, SoftDeleteMixin
 
-class InstrumentType(Base, UUIDMixin, TimestampMixin, TenantMixin):
-    __tablename__ = "instrument_types"
+class InstrumentType(Document):
+    id: UUID = Field(default_factory=uuid4)
+    tenant_id: UUID
+    name: str
+    description: Optional[str] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    name: Mapped[str] = mapped_column(String(128), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    class Settings:
+        name = "instrument_types"
 
-class Instrument(Base, UUIDMixin, TimestampMixin, TenantMixin, SoftDeleteMixin):
-    __tablename__ = "instruments"
+class Instrument(Document):
+    id: UUID = Field(default_factory=uuid4)
+    tenant_id: UUID
+    instrument_type_id: Optional[UUID] = None
+    name: str
+    asset_id: str
+    model: Optional[str] = None
+    serial_number: Optional[str] = None
+    operational_status: str = "operational"
+    availability_status: str = "available"
+    is_operational: bool = True
+    calibration_due_date: Optional[datetime] = None
+    maintenance_due_date: Optional[datetime] = None
+    is_deleted: bool = False
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
-    asset_id: Mapped[str] = mapped_column(String(64), nullable=False)
-    instrument_type_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("instrument_types.id", ondelete="RESTRICT"), nullable=False)
-    model: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
-    serial_number: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
-    is_operational: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    class Settings:
+        name = "instruments"
 
-class InstrumentCalibration(Base, UUIDMixin, TimestampMixin, TenantMixin):
-    __tablename__ = "instrument_calibrations"
+class InstrumentCalibration(Document):
+    id: UUID = Field(default_factory=uuid4)
+    instrument_id: UUID
+    calibrated_at: datetime
+    status: str = "passed"
+    notes: Optional[str] = None
 
-    instrument_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("instruments.id", ondelete="CASCADE"), nullable=False)
-    calibrated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    status: Mapped[str] = mapped_column(String(32), default="passed", nullable=False)
+    class Settings:
+        name = "instrument_calibrations"
 
-class InstrumentMaintenance(Base, UUIDMixin, TimestampMixin, TenantMixin):
-    __tablename__ = "instrument_maintenances"
+class InstrumentMaintenance(Document):
+    id: UUID = Field(default_factory=uuid4)
+    instrument_id: UUID
+    performed_at: datetime
+    notes: Optional[str] = None
 
-    instrument_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("instruments.id", ondelete="CASCADE"), nullable=False)
-    performed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    notes: Mapped[Optional[str]] = mapped_column(String(1024), nullable=True)
+    class Settings:
+        name = "instrument_maintenances"
 
-class InstrumentReservation(Base, UUIDMixin, TimestampMixin, TenantMixin):
-    __tablename__ = "instrument_reservations"
+class InstrumentReservation(Document):
+    id: UUID = Field(default_factory=uuid4)
+    instrument_id: UUID
+    user_id: UUID
+    start_time: datetime
+    end_time: datetime
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    instrument_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("instruments.id", ondelete="CASCADE"), nullable=False)
-    user_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    start_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    end_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    class Settings:
+        name = "instrument_reservations"
 
-class InstrumentUsage(Base, UUIDMixin, TimestampMixin, TenantMixin):
-    __tablename__ = "instrument_usages"
+class InstrumentUsage(Document):
+    id: UUID = Field(default_factory=uuid4)
+    instrument_id: UUID
+    user_id: UUID
+    start_time: datetime
+    end_time: Optional[datetime] = None
 
-    instrument_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("instruments.id", ondelete="CASCADE"), nullable=False)
-    user_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    start_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    end_time: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    class Settings:
+        name = "instrument_usages"
 
-class InstrumentAttachment(Base, UUIDMixin, TimestampMixin, TenantMixin):
-    __tablename__ = "instrument_attachments"
+class InstrumentAttachment(Document):
+    id: UUID = Field(default_factory=uuid4)
+    instrument_id: UUID
+    file_name: str
+    file_path: str
 
-    instrument_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("instruments.id", ondelete="CASCADE"), nullable=False)
-    file_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    file_path: Mapped[str] = mapped_column(String(512), nullable=False)
+    class Settings:
+        name = "instrument_attachments"

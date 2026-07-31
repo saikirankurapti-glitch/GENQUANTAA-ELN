@@ -58,7 +58,7 @@ class ExperimentBase(BaseModel):
 
 class ExperimentCreate(ExperimentBase):
     project_id: UUID = Field(..., description="Parent Project identifier")
-    organization_id: UUID = Field(..., description="Target Organization identifier")
+    organization_id: Optional[UUID] = Field(None, description="Target Organization identifier")
     owner_id: Optional[UUID] = Field(None, description="Owner / Lead Scientist user identifier")
     reviewer_id: Optional[UUID] = Field(None, description="Designated Reviewer user identifier")
 

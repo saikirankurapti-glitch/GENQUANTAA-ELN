@@ -57,7 +57,7 @@ class ProjectBase(BaseModel):
 
 
 class ProjectCreate(ProjectBase):
-    organization_id: UUID = Field(..., description="Target Organization identifier")
+    organization_id: Optional[UUID] = Field(None, description="Target Organization identifier")
     owner_id: Optional[UUID] = Field(None, description="Primary Principal Investigator / Owner user identifier")
 
 

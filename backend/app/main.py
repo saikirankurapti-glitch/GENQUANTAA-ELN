@@ -12,6 +12,15 @@ from app.models.identity import (
 )
 from app.models.rbac import Role, Permission, RolePermission
 
+from app.models.project import Project, ProjectCollaborator, ProjectAttachment
+from app.models.experiment import Experiment, ExperimentCollaborator, ExperimentAttachment
+from app.models.sample import Sample, SampleType, SampleStorageLocation, SampleChainOfCustody, SampleAttachment, SampleAliquot
+from app.models.inventory import InventoryItem, InventoryCategory, InventorySupplier, InventoryLocation, InventoryBatch, InventoryTransaction
+from app.models.instrument import Instrument, InstrumentType, InstrumentCalibration, InstrumentMaintenance, InstrumentReservation, InstrumentUsage, InstrumentAttachment
+from app.models.sequence import Sequence, SequenceVersion, SequenceAnnotation, SequenceAttachment, SequenceAnalysisResult
+from app.models.notebook import NotebookEntry, NotebookEntryVersion, NotebookAttachment, NotebookComment, NotebookTag
+from app.models.protocol import Protocol, ProtocolVersion, ProtocolStep, ProtocolAttachment, ProtocolApproval
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Initialize MongoDB client
@@ -24,9 +33,18 @@ async def lifespan(app: FastAPI):
             User, UserProfile, UserRole, UserPreference, RefreshToken,
             UserSession, ApiKey, MFADevice, TrustedDevice, ElectronicSignatureProfile,
             LoginHistory, PasswordHistory,
-            Role, Permission, RolePermission
+            Role, Permission, RolePermission,
+            Project, ProjectCollaborator, ProjectAttachment,
+            Experiment, ExperimentCollaborator, ExperimentAttachment,
+            Sample, SampleType, SampleStorageLocation, SampleChainOfCustody, SampleAttachment, SampleAliquot,
+            InventoryItem, InventoryCategory, InventorySupplier, InventoryLocation, InventoryBatch, InventoryTransaction,
+            Instrument, InstrumentType, InstrumentCalibration, InstrumentMaintenance, InstrumentReservation, InstrumentUsage, InstrumentAttachment,
+            Sequence, SequenceVersion, SequenceAnnotation, SequenceAttachment, SequenceAnalysisResult,
+            NotebookEntry, NotebookEntryVersion, NotebookAttachment, NotebookComment, NotebookTag,
+            Protocol, ProtocolVersion, ProtocolStep, ProtocolAttachment, ProtocolApproval
         ]
     )
+
     # Auto-seed default admin user according to Sprint PDF Requirement 8
     try:
         from app.db.enums import UserStatus
