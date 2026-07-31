@@ -21,9 +21,14 @@ export const getUserInitials = (user?: User | null, defaultName?: string): strin
 };
 
 export const getUserRole = (user?: User | null): string => {
-  if (!user) return 'Scientist';
-  if (user.profile?.designation) return user.profile.designation;
-  return 'Scientist';
+  if (!user) return 'Researcher';
+  if (user.roles && user.roles.length > 0 && user.roles[0].role_name) {
+    return user.roles[0].role_name;
+  }
+  if (user.profile?.designation) {
+    return user.profile.designation;
+  }
+  return 'Researcher';
 };
 
 export const getUserDepartment = (user?: User | null): string => {

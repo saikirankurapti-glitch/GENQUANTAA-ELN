@@ -1,16 +1,16 @@
 import React, { useState } from 'react';
-import type { ViewMode, UserPersona } from '../../types';
+import type { ViewMode } from '../../types';
 import { useAuth } from '../../providers/AuthProvider';
-import { getUserInitials } from '../../utils/userUtils';
-import { Search, Plus, Bell, Sparkles, Command, ChevronDown, UserCheck } from 'lucide-react';
+import { getUserInitials, getUserRole } from '../../utils/userUtils';
+import { Search, Plus, Bell, Sparkles, Command, Shield } from 'lucide-react';
 
 interface HeaderProps {
   currentView: ViewMode;
   onSelectView: (view: ViewMode) => void;
   unreadCount: number;
   onOpenQuickCreate: () => void;
-  activePersona: UserPersona;
-  onSelectPersona: (persona: UserPersona) => void;
+  activePersona?: any;
+  onSelectPersona?: any;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -18,20 +18,10 @@ export const Header: React.FC<HeaderProps> = ({
   onSelectView,
   unreadCount,
   onOpenQuickCreate,
-  activePersona,
-  onSelectPersona
 }) => {
   const { user } = useAuth();
   const [searchFocused, setSearchFocused] = useState(false);
-  const [showPersonaDropdown, setShowPersonaDropdown] = useState(false);
-
-  const personas: UserPersona[] = [
-    'Bench Scientist (Researcher)',
-    'Lab Manager / PI',
-    'Bioinformatician',
-    'QA / Compliance Auditor',
-    'Admin (IT/Ops)'
-  ];
+  const userRole = getUserRole(user);
 
   const getViewTitle = () => {
     switch (currentView) {
@@ -68,37 +58,10 @@ export const Header: React.FC<HeaderProps> = ({
       {/* Action Controls */}
       <div className="flex items-center gap-3">
         
-        {/* Active Persona Badge & Switcher */}
-        <div className="relative hidden md:block">
-          <button
-            onClick={() => setShowPersonaDropdown(!showPersonaDropdown)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors text-xs font-semibold"
-          >
-            <UserCheck className="w-3.5 h-3.5 text-blue-600" />
-            <span>Persona: {activePersona.split(' ')[0]}</span>
-            <ChevronDown className="w-3.5 h-3.5 text-blue-500" />
-          </button>
-
-          {showPersonaDropdown && (
-            <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-slate-200 py-2 z-30 space-y-1">
-              <div className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Switch Active User Persona</div>
-              {personas.map((p) => (
-                <button
-                  key={p}
-                  onClick={() => {
-                    onSelectPersona(p);
-                    setShowPersonaDropdown(false);
-                  }}
-                  className={`w-full text-left px-3 py-2 text-xs transition-colors flex items-center justify-between ${
-                    activePersona === p ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-700 hover:bg-slate-50'
-                  }`}
-                >
-                  <span>{p}</span>
-                  {activePersona === p && <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>}
-                </button>
-              ))}
-            </div>
-          )}
+        {/* Read-Only Assigned Role Badge */}
+        <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 border border-slate-200 text-xs font-semibold select-none">
+          <Shield className="w-3.5 h-3.5 text-slate-500" />
+          <span>Role: {userRole}</span>
         </div>
 
         {/* Global RAG Search Bar Trigger */}

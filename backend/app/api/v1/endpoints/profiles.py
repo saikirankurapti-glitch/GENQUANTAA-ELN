@@ -48,12 +48,19 @@ async def update_my_profile(
     current_user: User = Depends(get_current_active_user),
     current_tenant: Tenant = Depends(get_current_tenant),
 ) -> Any:
-    """Update profile details for currently logged-in user."""
-    from app.crud.crud_identity import user_profile_repo
-    await user_service.update_profile(
-        db, user_id=current_user.id, tenant_id=current_tenant.id, obj_in=profile_in
-    )
-    profile = await user_profile_repo.get_by_user_id(db, user_id=current_user.id)
+    """Update profile details for currently logged-in user (role changes forbidden)."""
+    # Force designation to None so users cannot change their own role via profile update
+    profile_in.designation = None
+    from app.models.identity import UserProfile
+    profile = await UserProfile.find_one({"user_id": current_user.id})
+    if not profile:
+        profile = UserProfile(user_id=current_user.id)
+        await profile.insert()
+    
+    update_data = profile_in.model_dump(exclude_unset=True, exclude={"designation"})
+    for field, val in update_data.items():
+        setattr(profile, field, val)
+    await profile.save()
     return profile
 
 

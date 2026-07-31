@@ -62,27 +62,39 @@ async def create_user(
 async def list_users(
     *,
     db: AsyncSession = Depends(get_db),
-    organization_id: Optional[UUID] = None,
-    status_filter: Optional[str] = Query(None, alias="status"),
-    is_active: Optional[bool] = None,
     page: int = Query(1, ge=1),
     size: int = Query(50, ge=1, le=100),
+    search: Optional[str] = Query(None),
     current_user: User = Depends(require_admin),
     current_tenant: Tenant = Depends(get_current_tenant),
 ) -> Any:
-    """List users matching criteria within current tenant."""
-    status_enum = UserStatus(status_filter) if status_filter else None
-    users, total = await user_service.search_users(
-        db,
-        tenant_id=current_tenant.id,
-        organization_id=organization_id,
-        status=status_enum,
-        is_active=is_active,
-        page=page,
-        page_size=size,
-    )
+    """List users matching criteria within current tenant live from database."""
+    from app.models.identity import UserProfile, UserRole
+    query = {"is_deleted": False}
+    if search and search.strip():
+        s = search.strip()
+        query["$or"] = [
+            {"username": {"$regex": s, "$options": "i"}},
+            {"email": {"$regex": s, "$options": "i"}},
+            {"first_name": {"$regex": s, "$options": "i"}},
+            {"last_name": {"$regex": s, "$options": "i"}},
+        ]
+    
+    total = await User.find(query).count()
+    skip = (page - 1) * size
+    users_list = await User.find(query).skip(skip).limit(size).to_list()
+
+    items = []
+    for u in users_list:
+        u_dict = u.model_dump()
+        profile = await UserProfile.find_one({"user_id": u.id})
+        roles = await UserRole.find({"user_id": u.id, "is_active": True}).to_list()
+        u_dict["profile"] = profile.model_dump() if profile else None
+        u_dict["roles"] = [r.model_dump() for r in roles]
+        items.append(u_dict)
+
     pages = math.ceil(total / size) if total > 0 else 1
-    return UserPagination(items=users, total=total, page=page, size=size, pages=pages)
+    return UserPagination(items=items, total=total, page=page, size=size, pages=pages)
 
 
 @router.get("/search", response_model=UserPagination, summary="Search Users")
@@ -215,3 +227,63 @@ async def unlock_user(
         return await user_service.unlock_user(db, id=user_id, tenant_id=current_tenant.id)
     except UserNotFound as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+from pydantic import BaseModel, Field
+
+class ChangeRoleRequest(BaseModel):
+    role: str = Field(..., description="New role code or name to assign to user")
+
+@router.put("/{user_id}/role", summary="Change User Role (Admin Only)")
+async def change_user_role(
+    *,
+    user_id: UUID,
+    role_in: ChangeRoleRequest,
+    current_user: User = Depends(require_admin),
+    current_tenant: Tenant = Depends(get_current_tenant),
+) -> Any:
+    """
+    Update target user's role.
+    Strictly protected: ONLY Admin can call this endpoint.
+    Non-admin callers receive HTTP 403 Forbidden.
+    """
+    valid_roles = ["Admin", "PI", "Researcher", "Bioinformatician", "QA", "Viewer", "Lab Technician"]
+    target_role = role_in.role.strip()
+
+    matching_role = next((r for r in valid_roles if r.lower() == target_role.lower()), None)
+    if not matching_role:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid role '{target_role}'. Allowed roles: {', '.join(valid_roles)}"
+        )
+
+    from app.models.identity import UserProfile, UserRole
+    target_user = await User.find_one({"_id": user_id})
+    if not target_user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+
+    profile = await UserProfile.find_one({"user_id": user_id})
+    if not profile:
+        profile = UserProfile(user_id=user_id, designation=matching_role)
+        await profile.insert()
+    else:
+        profile.designation = matching_role
+        await profile.save()
+
+    user_role = await UserRole.find_one({"user_id": user_id, "is_active": True})
+    if not user_role:
+        user_role = UserRole(user_id=user_id, role_name=matching_role, is_primary=True, is_active=True, assigned_by=current_user.id)
+        await user_role.insert()
+    else:
+        user_role.role_name = matching_role
+        user_role.assigned_by = current_user.id
+        await user_role.save()
+
+    is_self = (current_user.id == user_id)
+
+    return {
+        "message": f"Successfully updated role to {matching_role}",
+        "user_id": str(user_id),
+        "role": matching_role,
+        "is_self": is_self
+    }

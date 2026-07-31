@@ -119,7 +119,13 @@ async def get_current_user_profile(
     current_user: User = Depends(get_current_active_user)
 ) -> Any:
     """Get the currently logged in user's profile."""
-    return current_user
+    from app.models.identity import UserProfile, UserRole
+    user_dict = current_user.model_dump()
+    profile = await UserProfile.find_one({"user_id": current_user.id})
+    roles = await UserRole.find({"user_id": current_user.id, "is_active": True}).to_list()
+    user_dict["profile"] = profile.model_dump() if profile else None
+    user_dict["roles"] = [r.model_dump() for r in roles]
+    return user_dict
 
 
 @router.post("/login", response_model=TokenResponse, summary="User Authentication Login")
@@ -141,11 +147,16 @@ async def login(
         if not user.is_active or user.status != UserStatus.ACTIVE:
             raise HTTPException(status_code=403, detail="User account is inactive or suspended.")
 
+        from app.models.identity import UserProfile, UserRole
+        profile = await UserProfile.find_one({"user_id": user.id})
+        user_role = await UserRole.find_one({"user_id": user.id, "is_active": True})
+        role_name = user_role.role_name if user_role else (profile.designation if profile and profile.designation else "Researcher")
+
         from app.core.security.jwt import create_access_token
         token = create_access_token(
             user_id=str(user.id),
             tenant_id=str(user.tenant_id),
-            role="Researcher",
+            role=role_name,
         )
         return TokenResponse(
             access_token=token,

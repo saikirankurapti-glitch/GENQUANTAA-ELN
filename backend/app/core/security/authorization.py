@@ -149,15 +149,21 @@ def require_tenant_access(target_tenant_id: UUID) -> Callable:
 # PERMISSION CHECKERS
 # =================================================================================
 
-def require_admin(
+async def require_admin(
     current_user: User = Depends(get_current_active_user),
 ) -> User:
     """Dependency checking if current user possesses Administrator privileges."""
-    designation = (current_user.profile.designation or "").lower() if current_user and current_user.profile else ""
-    if "admin" in designation or "super" in designation:
+    from app.models.identity import UserProfile, UserRole
+    profile = await UserProfile.find_one({"user_id": current_user.id})
+    user_role = await UserRole.find_one({"user_id": current_user.id, "is_active": True})
+    
+    designation = (profile.designation or "").lower() if profile and profile.designation else ""
+    role_name = (user_role.role_name or "").lower() if user_role and user_role.role_name else ""
+
+    if "admin" in designation or "super" in designation or "admin" in role_name or "super" in role_name:
         return current_user
 
-    logger.warning(f"Admin access denied for user {current_user.id} with designation '{designation}'")
+    logger.warning(f"Admin access denied for user {current_user.id}")
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
         detail="Access denied. Administrator privileges required.",

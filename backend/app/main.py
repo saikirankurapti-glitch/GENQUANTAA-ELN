@@ -27,6 +27,61 @@ async def lifespan(app: FastAPI):
             Role, Permission, RolePermission
         ]
     )
+    # Auto-seed default admin user according to Sprint PDF Requirement 8
+    try:
+        from app.db.enums import UserStatus
+        from app.services.identity.password_service import password_service
+        default_users_data = [
+            {"email": "admin@eln.com", "username": "admin", "first": "System", "last": "Admin", "role": "Admin", "dept": "System Administration"},
+            {"email": "sarah.johnson@eln.com", "username": "sarahj", "first": "Dr. Sarah", "last": "Johnson", "role": "Researcher", "dept": "Gene Editing Discovery"},
+            {"email": "raj.patel@eln.com", "username": "rajp", "first": "Raj", "last": "Patel", "role": "Bioinformatician", "dept": "Bioinformatics & RAG"},
+            {"email": "saikiran@eln.com", "username": "saikiran", "first": "Sai", "last": "Kiran", "role": "Admin", "dept": "Infrastructure & DB"},
+            {"email": "ananya.sharma@eln.com", "username": "ananyas", "first": "Ananya", "last": "Sharma", "role": "QA", "dept": "Quality Assurance & Audit"},
+            {"email": "ashwin.kumar@eln.com", "username": "ashwink", "first": "Dr. Ashwin", "last": "Kumar", "role": "PI", "dept": "Molecular Biology"},
+        ]
+
+        tenant = await Tenant.find_one({"code": "DEFAULT"})
+        if not tenant:
+            tenant = Tenant(name="Default Tenant", code="DEFAULT")
+            await tenant.insert()
+
+        pwd_hash = password_service.hash_password("Admin@12345678")
+
+        for u_data in default_users_data:
+            existing = await User.find_one({"email": u_data["email"]})
+            if not existing:
+                u_obj = User(
+                    tenant_id=tenant.id,
+                    username=u_data["username"],
+                    email=u_data["email"],
+                    first_name=u_data["first"],
+                    last_name=u_data["last"],
+                    display_name=f"{u_data['first']} {u_data['last']}",
+                    password_hash=pwd_hash,
+                    is_active=True,
+                    is_locked=False,
+                    status=UserStatus.ACTIVE,
+                )
+                await u_obj.insert()
+
+                p_obj = UserProfile(
+                    user_id=u_obj.id,
+                    department=u_data["dept"],
+                    designation=u_data["role"],
+                )
+                await p_obj.insert()
+
+                r_obj = UserRole(
+                    user_id=u_obj.id,
+                    role_name=u_data["role"],
+                    is_primary=True,
+                    is_active=True,
+                )
+                await r_obj.insert()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Admin seeding check warning: {e}")
+
     yield
     client.close()
 

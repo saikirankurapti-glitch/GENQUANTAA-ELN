@@ -29,6 +29,10 @@ export const normalizeRole = (user?: User | null): string => {
 export const canViewViewMode = (user: User | null, view: ViewMode): boolean => {
   if (!user) return true; // Default allow during unauthenticated landing
   
+  if (view === 'admin') {
+    return isUserAdmin(user);
+  }
+
   // Public / Shared views accessible to all logged-in users
   if (['dashboard', 'settings', 'notifications', 'login', 'landing'].includes(view)) {
     return true;

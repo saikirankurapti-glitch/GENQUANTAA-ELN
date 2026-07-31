@@ -127,8 +127,6 @@ export function App() {
           onSelectView={setCurrentView}
           unreadCount={unreadNotificationsCount}
           onOpenQuickCreate={() => setShowQuickCreateModal(true)}
-          activePersona={activePersona}
-          onSelectPersona={setActivePersona}
         />
 
         {/* Dynamic Screen Viewport */}
@@ -254,7 +252,6 @@ export function App() {
           {currentView === 'admin' && (
             <AdminPanelView
               onSelectView={setCurrentView}
-              activePersona={activePersona}
             />
           )}
             </>
