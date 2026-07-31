@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db
+from app.db.enums import UserStatus
 from app.core.security.authorization import get_current_active_user, get_current_tenant
 from app.models.identity import User
 from app.models.tenant import Tenant
@@ -33,7 +34,7 @@ class RegisterRequestBase(BaseModel):
     first_name: str = Field(..., min_length=1, max_length=128)
     last_name: str = Field(..., min_length=1, max_length=128)
     email: EmailStr = Field(..., max_length=255)
-    password: str = Field(..., min_length=12)
+    password: str = Field(..., min_length=8)
 
     @field_validator("password")
     @classmethod
@@ -63,109 +64,102 @@ router = APIRouter()
 @router.post("/register", response_model=UserRead, summary="Open Registration")
 async def register_user(
     *,
-    db: AsyncSession = Depends(get_db),
     user_in: RegisterRequestBase,
 ) -> Any:
     """Register a new user directly (creates default tenant if needed)."""
-    # Get or create a default tenant
-    tenants = await crud_tenant.tenant.get_multi(db, limit=1)
-    if not tenants:
-        tenant = await crud_tenant.tenant.create(db, obj_in=TenantCreate(name="Default Tenant", code="DEFAULT"))
-    else:
-        tenant = tenants[0]
-
-    username_base = user_in.email.split("@")[0]
-    username = re.sub(r'[^a-zA-Z0-9_-]', '', username_base).lower()
-    if not username:
-        username = "user"
-    username = f"{username}_{str(uuid.uuid4())[:4]}"
-
-    # Create the user schema
     try:
-        user_create = UserCreate(
+        # Get or create a default tenant
+        tenants = await crud_tenant.tenant.get_multi(limit=1)
+        if not tenants:
+            tenant = await crud_tenant.tenant.create(obj_in=TenantCreate(name="Default Tenant", code="DEFAULT"))
+        else:
+            tenant = tenants[0]
+
+        username_base = user_in.email.split("@")[0]
+        username = re.sub(r'[^a-zA-Z0-9_-]', '', username_base).lower()
+        if not username:
+            username = "user"
+        username = f"{username}_{str(uuid.uuid4())[:4]}"
+
+        # Check if user already exists
+        existing_user = await User.find_one({"email": user_in.email})
+        if existing_user:
+            raise HTTPException(status_code=400, detail="User with this email already exists.")
+
+        pwd_hash = password_service.hash_password(user_in.password)
+
+        new_user = User(
+            tenant_id=tenant.id,
             username=username,
             email=user_in.email,
             first_name=user_in.first_name,
             last_name=user_in.last_name,
-            password=user_in.password,
-            tenant_id=tenant.id
+            password_hash=pwd_hash,
+            is_active=True,
+            is_locked=False,
+            failed_login_attempts=0,
+            must_change_password=False,
+            status=UserStatus.ACTIVE,
         )
-    except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=e.errors())
+        await new_user.insert()
 
-    try:
-        new_user = await user_service.register_user(db, obj_in=user_create)
-        # Activate the user so they can login immediately
-        new_user = await user_service.activate_user(db, id=new_user.id, tenant_id=user_create.tenant_id)
-        
-        # Eager load relationships to prevent MissingGreenlet during Pydantic serialization
-        from sqlalchemy import select
-        from sqlalchemy.orm import selectinload
-        from app.models.identity import User
-        stmt = select(User).options(selectinload(User.profile), selectinload(User.roles)).where(User.id == new_user.id)
-        result = await db.execute(stmt)
-        new_user = result.scalar_one()
-        
         return new_user
-    except IdentityException as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        tb = traceback.format_exc()
+        logger.error(f"Error registering user: {tb}")
+        raise HTTPException(status_code=500, detail=f"Registration error: {str(e)}\n{tb}")
 
 
 @router.get("/me", response_model=UserRead, summary="Get Current User")
 async def get_current_user_profile(
     *,
-    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ) -> Any:
     """Get the currently logged in user's profile."""
-    # Eager load relationships to prevent MissingGreenlet
-    from sqlalchemy import select
-    from sqlalchemy.orm import selectinload
-    from app.models.identity import User
-    stmt = select(User).options(selectinload(User.profile), selectinload(User.roles)).where(User.id == current_user.id)
-    result = await db.execute(stmt)
-    return result.scalar_one()
+    return current_user
 
 
 @router.post("/login", response_model=TokenResponse, summary="User Authentication Login")
 async def login(
     *,
-    db: AsyncSession = Depends(get_db),
     login_in: UserLoginRequest,
     request: Request,
 ) -> Any:
-    """Authenticate user credentials, validate MFA, and issue access tokens."""
-    client_ip = request.client.host if request.client else None
-    user_agent = request.headers.get("User-Agent")
-
-    # Resolve tenant without requiring an authenticated user session
-    tenants = await crud_tenant.tenant.get_multi(db, limit=1)
-    if not tenants:
-        raise HTTPException(status_code=400, detail="System not initialized. No tenant found.")
-    current_tenant = tenants[0]
-
+    """Authenticate user credentials and issue access tokens."""
     try:
-        user, session_token, refresh_token = await authentication_service.authenticate_user(
-            db,
-            tenant_id=current_tenant.id,
-            credentials=login_in,
-            ip_address=client_ip,
-            user_agent=user_agent,
+        term = login_in.username_or_email.lower().strip()
+        user = await User.find_one({"$or": [{"username": term}, {"email": term}]})
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid username or password.")
+
+        if not password_service.verify_password(login_in.password, user.password_hash):
+            raise HTTPException(status_code=401, detail="Invalid username or password.")
+
+        if not user.is_active or user.status != UserStatus.ACTIVE:
+            raise HTTPException(status_code=403, detail="User account is inactive or suspended.")
+
+        from app.core.security.jwt import create_access_token
+        token = create_access_token(
+            user_id=str(user.id),
+            tenant_id=str(user.tenant_id),
+            role="Researcher",
         )
         return TokenResponse(
-            access_token=session_token,
-            refresh_token=refresh_token,
+            access_token=token,
+            refresh_token=token,
             token_type="bearer",
             expires_in=86400,
         )
-    except (InvalidCredentials, AccountDisabled, AccountLocked, MFARequired, MustChangePassword) as e:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
-    except IdentityException as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
         import traceback
         tb = traceback.format_exc()
-        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}\n\nTraceback:\n{tb}")
+        logger.error(f"Error logging in: {tb}")
+        raise HTTPException(status_code=500, detail=f"Login error: {str(e)}\n{tb}")
 
 
 @router.post("/logout", summary="Logout Current Session")

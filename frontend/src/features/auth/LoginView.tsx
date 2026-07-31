@@ -45,7 +45,17 @@ export const LoginView: React.FC<LoginViewProps> = ({
       // The AuthProvider will handle the redirect or state update internally,
       // which will naturally unmount this LoginView in App.tsx
     } catch (err: any) {
-      setErrorMessage(err.response?.data?.detail || 'Invalid email or password.');
+      let msg = 'Invalid email or password.';
+      if (err.response?.data?.detail) {
+        if (typeof err.response.data.detail === 'string') {
+          msg = err.response.data.detail;
+        } else if (Array.isArray(err.response.data.detail)) {
+          msg = err.response.data.detail.map((d: any) => d.msg || d.detail).join(' ');
+        }
+      } else if (err.message) {
+        msg = err.message;
+      }
+      setErrorMessage(msg);
     }
   };
 
@@ -66,7 +76,17 @@ export const LoginView: React.FC<LoginViewProps> = ({
       setSignInEmail(signUpEmail);
       setSignInPassword(signUpPassword);
     } catch (err: any) {
-      setErrorMessage(err.message || err.response?.data?.detail || 'Failed to register. Please contact administrator.');
+      let msg = 'Failed to register. Please contact administrator.';
+      if (err.response?.data?.detail) {
+        if (typeof err.response.data.detail === 'string') {
+          msg = err.response.data.detail;
+        } else if (Array.isArray(err.response.data.detail)) {
+          msg = err.response.data.detail.map((d: any) => d.msg || d.detail).join(' ');
+        }
+      } else if (err.message) {
+        msg = err.message;
+      }
+      setErrorMessage(msg);
     }
   };
 

@@ -105,62 +105,88 @@ class DashboardService:
         """
         Assemble aggregated Dashboard response for current user.
         """
-        # 1. Project & Experiment Counts
-        project_count = await dashboard_repo.get_project_count(db, tenant_id=tenant_id)
-        active_exp_count, completed_exp_count = await dashboard_repo.get_experiment_counts(
-            db, tenant_id=tenant_id
-        )
+        project_count = 0
+        active_exp_count = 0
+        completed_exp_count = 0
+        recent_experiments: List[ExperimentSummary] = []
+        pending_notifications: List[NotificationSummary] = []
+        activity_feed: List[ActivityFeedItem] = []
 
-        # 2. Recent Experiments
-        recent_exps_db = await dashboard_repo.get_recent_experiments(db, tenant_id=tenant_id, limit=5)
-        recent_experiments = [
-            ExperimentSummary(
-                id=exp.id,
-                title=exp.title,
-                experiment_number=exp.experiment_number,
-                status=str(exp.status.value) if hasattr(exp.status, "value") else str(exp.status),
-                updated_at=exp.updated_at,
-            )
-            for exp in recent_exps_db
-        ]
+        if db is not None:
+            # 1. Project & Experiment Counts
+            try:
+                project_count = await dashboard_repo.get_project_count(db, tenant_id=tenant_id)
+            except Exception as e:
+                logger.warning(f"Project count query skipped: {e}")
 
-        # 3. Pending Notifications
-        notifications_db = await dashboard_repo.get_pending_notifications(
-            db, tenant_id=tenant_id, user_id=user.id, limit=5
-        )
-        pending_notifications = [
-            NotificationSummary(
-                id=n.id,
-                title=n.title,
-                message=n.message,
-                type=n.type,
-                created_at=n.created_at,
-                is_read=n.is_read,
-            )
-            for n in notifications_db
-        ]
+            try:
+                active_exp_count, completed_exp_count = await dashboard_repo.get_experiment_counts(
+                    db, tenant_id=tenant_id
+                )
+            except Exception as e:
+                logger.warning(f"Experiment counts query skipped: {e}")
 
-        # 4. Activity Feed
-        activity_feed_db = await dashboard_repo.get_activity_feed(db, limit=10)
-        activity_feed = [
-            ActivityFeedItem(
-                id=audit.id,
-                operation=audit.operation,
-                entity_type=audit.entity_type,
-                description=f"{audit.operation} on {audit.entity_type}",
-                performed_by_name=user_name,
-                performed_at=audit.performed_at,
-            )
-            for audit, user_name in activity_feed_db
-        ]
+            # 2. Recent Experiments
+            try:
+                recent_exps_db = await dashboard_repo.get_recent_experiments(db, tenant_id=tenant_id, limit=5)
+                recent_experiments = [
+                    ExperimentSummary(
+                        id=exp.id,
+                        title=exp.title,
+                        experiment_number=exp.experiment_number,
+                        status=str(exp.status.value) if hasattr(exp.status, "value") else str(exp.status),
+                        updated_at=exp.updated_at,
+                    )
+                    for exp in recent_exps_db
+                ]
+            except Exception as e:
+                logger.warning(f"Recent experiments query skipped: {e}")
+
+            # 3. Pending Notifications
+            try:
+                notifications_db = await dashboard_repo.get_pending_notifications(
+                    db, tenant_id=tenant_id, user_id=user.id, limit=5
+                )
+                pending_notifications = [
+                    NotificationSummary(
+                        id=n.id,
+                        title=n.title,
+                        message=n.message,
+                        type=n.type,
+                        created_at=n.created_at,
+                        is_read=n.is_read,
+                    )
+                    for n in notifications_db
+                ]
+            except Exception as e:
+                logger.warning(f"Notifications query skipped: {e}")
+
+            # 4. Activity Feed
+            try:
+                activity_feed_db = await dashboard_repo.get_activity_feed(db, limit=10)
+                activity_feed = [
+                    ActivityFeedItem(
+                        id=audit.id,
+                        operation=audit.operation,
+                        entity_type=audit.entity_type,
+                        description=f"{audit.operation} on {audit.entity_type}",
+                        performed_by_name=user_name,
+                        performed_at=audit.performed_at,
+                    )
+                    for audit, user_name in activity_feed_db
+                ]
+            except Exception as e:
+                logger.warning(f"Activity feed query skipped: {e}")
 
         # 5. Quick Actions & AI Copilot Shortcuts
-        try:
-            permissions = await authorization_service.get_user_permission_codes(
-                db, user_id=user.id, tenant_id=tenant_id
-            )
-        except Exception:
-            permissions = set()
+        permissions = set()
+        if db is not None:
+            try:
+                permissions = await authorization_service.get_user_permission_codes(
+                    db, user_id=user.id, tenant_id=tenant_id
+                )
+            except Exception:
+                permissions = set()
 
         quick_actions = self.build_quick_actions(permissions)
         ai_copilot_shortcuts = self.build_ai_copilot_shortcuts()

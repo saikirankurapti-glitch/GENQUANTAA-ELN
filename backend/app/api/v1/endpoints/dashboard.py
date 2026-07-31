@@ -33,6 +33,13 @@ async def get_dashboard(
     current_tenant: Tenant = Depends(get_current_tenant),
 ) -> Any:
     """Return single aggregated DashboardResponse object."""
-    return await dashboard_service.get_dashboard(
-        db, user=current_user, tenant_id=current_tenant.id
-    )
+    try:
+        return await dashboard_service.get_dashboard(
+            db, user=current_user, tenant_id=current_tenant.id
+        )
+    except Exception as e:
+        import traceback
+        tb = traceback.format_exc()
+        logger.error(f"Error in get_dashboard: {tb}")
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=f"Dashboard error: {str(e)}\n{tb}")

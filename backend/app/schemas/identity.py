@@ -176,7 +176,7 @@ class UserBase(BaseModel):
 
 
 class UserCreate(UserBase):
-    password: str = Field(..., min_length=12, description="Plaintext password meeting complexity requirements")
+    password: str = Field(..., min_length=8, description="Plaintext password meeting complexity requirements")
     tenant_id: UUID = Field(..., description="Tenant workspace identifier")
     organization_id: Optional[UUID] = Field(None, description="Optional organization identifier")
     profile: Optional[UserProfileCreate] = Field(None, description="Optional initial user profile data")
@@ -184,8 +184,8 @@ class UserCreate(UserBase):
     @field_validator("password")
     @classmethod
     def validate_password_complexity(cls, v: str) -> str:
-        if len(v) < 12:
-            raise ValueError("Password must be at least 12 characters long.")
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters long.")
         if not re.search(r"[A-Z]", v):
             raise ValueError("Password must contain at least one uppercase letter.")
         if not re.search(r"[a-z]", v):

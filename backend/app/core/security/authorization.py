@@ -61,28 +61,12 @@ async def get_current_user(
     try:
         from app.core.security.jwt import decode_access_token
         jwt_payload = decode_access_token(token)
-        if jwt_payload and "user_id" in jwt_payload:
-            user_id = UUID(jwt_payload["user_id"])
-            tenant_id = UUID(jwt_payload["tenant_id"]) if jwt_payload.get("tenant_id") else None
-            user = await user_service.get_user_by_id(db, id=user_id, tenant_id=tenant_id, include_relations=True)
-        else:
-            session = await session_service.validate_session(db, raw_session_token=token)
-            user = await user_service.get_user_by_id(
-                db, id=session.user_id, tenant_id=session.user.tenant_id if hasattr(session, "user") and session.user else None, include_relations=True
-            )
+        if jwt_payload and ("user_id" in jwt_payload or "sub" in jwt_payload):
+            uid_str = jwt_payload.get("user_id") or jwt_payload.get("sub")
+            user_id = UUID(uid_str)
+            user = await User.find_one({"_id": user_id, "is_deleted": False})
     except Exception as e:
-        logger.warning(f"JWT/Session validation failed, trying fallback: {e}")
-        try:
-            session = await session_service.validate_session(db, raw_session_token=token)
-            user = await user_service.get_user_by_id(
-                db, id=session.user_id, tenant_id=session.user.tenant_id if hasattr(session, "user") and session.user else None, include_relations=True
-            )
-        except (SessionNotFound, SessionExpired) as e_sess:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Could not validate JWT or session credentials.",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
+        logger.warning(f"JWT validation failed: {e}")
 
     if not user:
         raise HTTPException(
@@ -134,12 +118,9 @@ async def get_current_verified_user(
 
 async def get_current_tenant(
     current_user: User = Depends(get_current_active_user),
-    db: AsyncSession = Depends(get_db),
 ) -> Tenant:
     """Retrieve Tenant context to enforce multi-tenant isolation boundaries."""
-    stmt = select(Tenant).where(Tenant.id == current_user.tenant_id, Tenant.is_deleted == False)
-    res = await db.execute(stmt)
-    tenant = res.scalar_one_or_none()
+    tenant = await Tenant.find_one({"_id": current_user.tenant_id, "is_deleted": False})
 
     if not tenant:
         logger.error(f"Tenant isolation error: Tenant {current_user.tenant_id} not found for user {current_user.id}")
