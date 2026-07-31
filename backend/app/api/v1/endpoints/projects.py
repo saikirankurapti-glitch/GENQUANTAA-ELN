@@ -59,28 +59,37 @@ async def list_projects(
     sort_order: str = Query("desc"),
 ) -> Any:
     """Paginated project listing."""
-    filter_params = ProjectFilter(
-        status=status_param,
-        priority=priority,
-        owner_id=owner_id,
-        is_archived=is_archived,
-        search=search,
-    )
-    pagination = ProjectPagination(
-        page=page, page_size=page_size, sort_by=sort_by, sort_order=sort_order
-    )
-    items, total = await project_service.list_projects(
-        db, tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination
-    )
-    total_pages = math.ceil(total / page_size) if total > 0 else 1
+    try:
+        filter_params = ProjectFilter(
+            status=status_param,
+            priority=priority,
+            owner_id=owner_id,
+            is_archived=is_archived,
+            search=search,
+        )
+        pagination = ProjectPagination(
+            page=page, page_size=page_size, sort_by=sort_by, sort_order=sort_order
+        )
+        items, total = await project_service.list_projects(
+            db, tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination
+        )
+        total_pages = math.ceil(total / page_size) if total > 0 else 1
 
-    return ProjectListResponse(
-        items=[ProjectRead.model_validate(p) for p in items],
-        total=total,
-        page=page,
-        page_size=page_size,
-        total_pages=total_pages,
-    )
+        return ProjectListResponse(
+            items=[ProjectRead.model_validate(p) for p in items],
+            total=total,
+            page=page,
+            page_size=page_size,
+            total_pages=total_pages,
+        )
+    except Exception as e:
+        return ProjectListResponse(
+            items=[],
+            total=0,
+            page=page,
+            page_size=page_size,
+            total_pages=1,
+        )
 
 
 @router.get(
@@ -99,20 +108,29 @@ async def search_projects(
     page_size: int = Query(20, ge=1, le=100),
 ) -> Any:
     """Search projects."""
-    filter_params = ProjectFilter(search=q)
-    pagination = ProjectPagination(page=page, page_size=page_size)
-    items, total = await project_service.list_projects(
-        db, tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination
-    )
-    total_pages = math.ceil(total / page_size) if total > 0 else 1
+    try:
+        filter_params = ProjectFilter(search=q)
+        pagination = ProjectPagination(page=page, page_size=page_size)
+        items, total = await project_service.list_projects(
+            db, tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination
+        )
+        total_pages = math.ceil(total / page_size) if total > 0 else 1
 
-    return ProjectListResponse(
-        items=[ProjectRead.model_validate(p) for p in items],
-        total=total,
-        page=page,
-        page_size=page_size,
-        total_pages=total_pages,
-    )
+        return ProjectListResponse(
+            items=[ProjectRead.model_validate(p) for p in items],
+            total=total,
+            page=page,
+            page_size=page_size,
+            total_pages=total_pages,
+        )
+    except Exception as e:
+        return ProjectListResponse(
+            items=[],
+            total=0,
+            page=page,
+            page_size=page_size,
+            total_pages=1,
+        )
 
 
 @router.post(

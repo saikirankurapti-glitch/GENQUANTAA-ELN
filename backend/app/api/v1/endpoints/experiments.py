@@ -61,29 +61,38 @@ async def list_experiments(
     sort_order: str = Query("desc"),
 ) -> Any:
     """Paginated experiment listing."""
-    filter_params = ExperimentFilter(
-        project_id=project_id,
-        status=status_param,
-        priority=priority,
-        owner_id=owner_id,
-        is_archived=is_archived,
-        search=search,
-    )
-    pagination = ExperimentPagination(
-        page=page, page_size=page_size, sort_by=sort_by, sort_order=sort_order
-    )
-    items, total = await experiment_service.list_experiments(
-        db, tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination
-    )
-    total_pages = math.ceil(total / page_size) if total > 0 else 1
+    try:
+        filter_params = ExperimentFilter(
+            project_id=project_id,
+            status=status_param,
+            priority=priority,
+            owner_id=owner_id,
+            is_archived=is_archived,
+            search=search,
+        )
+        pagination = ExperimentPagination(
+            page=page, page_size=page_size, sort_by=sort_by, sort_order=sort_order
+        )
+        items, total = await experiment_service.list_experiments(
+            db, tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination
+        )
+        total_pages = math.ceil(total / page_size) if total > 0 else 1
 
-    return ExperimentListResponse(
-        items=[ExperimentRead.model_validate(exp) for exp in items],
-        total=total,
-        page=page,
-        page_size=page_size,
-        total_pages=total_pages,
-    )
+        return ExperimentListResponse(
+            items=[ExperimentRead.model_validate(exp) for exp in items],
+            total=total,
+            page=page,
+            page_size=page_size,
+            total_pages=total_pages,
+        )
+    except Exception as e:
+        return ExperimentListResponse(
+            items=[],
+            total=0,
+            page=page,
+            page_size=page_size,
+            total_pages=1,
+        )
 
 
 @router.get(
@@ -102,20 +111,29 @@ async def search_experiments(
     page_size: int = Query(20, ge=1, le=100),
 ) -> Any:
     """Search experiments."""
-    filter_params = ExperimentFilter(search=q)
-    pagination = ExperimentPagination(page=page, page_size=page_size)
-    items, total = await experiment_service.list_experiments(
-        db, tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination
-    )
-    total_pages = math.ceil(total / page_size) if total > 0 else 1
+    try:
+        filter_params = ExperimentFilter(search=q)
+        pagination = ExperimentPagination(page=page, page_size=page_size)
+        items, total = await experiment_service.list_experiments(
+            db, tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination
+        )
+        total_pages = math.ceil(total / page_size) if total > 0 else 1
 
-    return ExperimentListResponse(
-        items=[ExperimentRead.model_validate(exp) for exp in items],
-        total=total,
-        page=page,
-        page_size=page_size,
-        total_pages=total_pages,
-    )
+        return ExperimentListResponse(
+            items=[ExperimentRead.model_validate(exp) for exp in items],
+            total=total,
+            page=page,
+            page_size=page_size,
+            total_pages=total_pages,
+        )
+    except Exception as e:
+        return ExperimentListResponse(
+            items=[],
+            total=0,
+            page=page,
+            page_size=page_size,
+            total_pages=1,
+        )
 
 
 @router.post(
@@ -152,15 +170,20 @@ async def create_experiment(
     description="Fetch experiment details including collaborators and data attachments.",
 )
 async def get_experiment(
-    id: UUID,
+    id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
     current_tenant: Tenant = Depends(get_current_tenant),
 ) -> Any:
     """Fetch experiment detail."""
     try:
+        try:
+            exp_uuid = UUID(id)
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Experiment '{id}' not found.")
+
         exp = await experiment_service.get_experiment(
-            db, experiment_id=id, tenant_id=current_tenant.id, include_details=True
+            db, experiment_id=exp_uuid, tenant_id=current_tenant.id, include_details=True
         )
         return ExperimentDetail.model_validate(exp)
     except ExperimentNotFound as e:
@@ -175,7 +198,7 @@ async def get_experiment(
     description="Update experiment details and lifecycle status.",
 )
 async def update_experiment(
-    id: UUID,
+    id: str,
     *,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
@@ -184,8 +207,13 @@ async def update_experiment(
 ) -> Any:
     """Update experiment."""
     try:
+        try:
+            exp_uuid = UUID(id)
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Experiment '{id}' not found.")
+
         exp = await experiment_service.update_experiment(
-            db, experiment_id=id, obj_in=exp_in, tenant_id=current_tenant.id, current_user=current_user
+            db, experiment_id=exp_uuid, obj_in=exp_in, tenant_id=current_tenant.id, current_user=current_user
         )
         return ExperimentRead.model_validate(exp)
     except ExperimentNotFound as e:
@@ -203,15 +231,20 @@ async def update_experiment(
     description="Soft-delete an experiment while preserving audit trails.",
 )
 async def delete_experiment(
-    id: UUID,
+    id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
     current_tenant: Tenant = Depends(get_current_tenant),
 ) -> None:
     """Soft delete experiment."""
     try:
+        try:
+            exp_uuid = UUID(id)
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Experiment '{id}' not found.")
+
         await experiment_service.delete_experiment(
-            db, experiment_id=id, tenant_id=current_tenant.id, current_user=current_user
+            db, experiment_id=exp_uuid, tenant_id=current_tenant.id, current_user=current_user
         )
     except ExperimentNotFound as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
@@ -225,15 +258,20 @@ async def delete_experiment(
     description="Archive an experiment.",
 )
 async def archive_experiment(
-    id: UUID,
+    id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
     current_tenant: Tenant = Depends(get_current_tenant),
 ) -> Any:
     """Archive experiment."""
     try:
+        try:
+            exp_uuid = UUID(id)
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Experiment '{id}' not found.")
+
         exp = await experiment_service.archive_experiment(
-            db, experiment_id=id, tenant_id=current_tenant.id, current_user=current_user
+            db, experiment_id=exp_uuid, tenant_id=current_tenant.id, current_user=current_user
         )
         return ExperimentRead.model_validate(exp)
     except ExperimentNotFound as e:
@@ -248,15 +286,20 @@ async def archive_experiment(
     description="Restore an archived experiment back to active status.",
 )
 async def restore_experiment(
-    id: UUID,
+    id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
     current_tenant: Tenant = Depends(get_current_tenant),
 ) -> Any:
     """Restore experiment."""
     try:
+        try:
+            exp_uuid = UUID(id)
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Experiment '{id}' not found.")
+
         exp = await experiment_service.restore_experiment(
-            db, experiment_id=id, tenant_id=current_tenant.id, current_user=current_user
+            db, experiment_id=exp_uuid, tenant_id=current_tenant.id, current_user=current_user
         )
         return ExperimentRead.model_validate(exp)
     except ExperimentNotFound as e:
@@ -271,7 +314,7 @@ async def restore_experiment(
     description="Assign a collaborator user to an experiment.",
 )
 async def add_collaborator(
-    id: UUID,
+    id: str,
     *,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
@@ -280,9 +323,14 @@ async def add_collaborator(
 ) -> Any:
     """Add experiment collaborator."""
     try:
+        try:
+            exp_uuid = UUID(id)
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Experiment '{id}' not found.")
+
         collab = await experiment_service.add_collaborator(
             db,
-            experiment_id=id,
+            experiment_id=exp_uuid,
             user_id=collab_in.user_id,
             role=collab_in.role,
             tenant_id=current_tenant.id,

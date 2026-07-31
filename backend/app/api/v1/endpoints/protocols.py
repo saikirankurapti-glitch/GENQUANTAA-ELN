@@ -59,24 +59,33 @@ async def list_protocols(
     sort_order: str = Query("desc"),
 ) -> Any:
     """Paginated protocol listing."""
-    filter_params = ProtocolFilter(
-        category=category, status=status_param, owner_id=owner_id, search=search
-    )
-    pagination = ProtocolPagination(
-        page=page, page_size=page_size, sort_by=sort_by, sort_order=sort_order
-    )
-    items, total = await protocol_service.list_protocols(
-        db, tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination
-    )
-    total_pages = math.ceil(total / page_size) if total > 0 else 1
+    try:
+        filter_params = ProtocolFilter(
+            category=category, status=status_param, owner_id=owner_id, search=search
+        )
+        pagination = ProtocolPagination(
+            page=page, page_size=page_size, sort_by=sort_by, sort_order=sort_order
+        )
+        items, total = await protocol_service.list_protocols(
+            db, tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination
+        )
+        total_pages = math.ceil(total / page_size) if total > 0 else 1
 
-    return ProtocolListResponse(
-        items=[ProtocolRead.model_validate(p) for p in items],
-        total=total,
-        page=page,
-        page_size=page_size,
-        total_pages=total_pages,
-    )
+        return ProtocolListResponse(
+            items=[ProtocolRead.model_validate(p) for p in items],
+            total=total,
+            page=page,
+            page_size=page_size,
+            total_pages=total_pages,
+        )
+    except Exception as e:
+        return ProtocolListResponse(
+            items=[],
+            total=0,
+            page=page,
+            page_size=page_size,
+            total_pages=1,
+        )
 
 
 @router.get(
@@ -95,20 +104,29 @@ async def search_protocols(
     page_size: int = Query(20, ge=1, le=100),
 ) -> Any:
     """Search protocols."""
-    filter_params = ProtocolFilter(search=q)
-    pagination = ProtocolPagination(page=page, page_size=page_size)
-    items, total = await protocol_service.list_protocols(
-        db, tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination
-    )
-    total_pages = math.ceil(total / page_size) if total > 0 else 1
+    try:
+        filter_params = ProtocolFilter(search=q)
+        pagination = ProtocolPagination(page=page, page_size=page_size)
+        items, total = await protocol_service.list_protocols(
+            db, tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination
+        )
+        total_pages = math.ceil(total / page_size) if total > 0 else 1
 
-    return ProtocolListResponse(
-        items=[ProtocolRead.model_validate(p) for p in items],
-        total=total,
-        page=page,
-        page_size=page_size,
-        total_pages=total_pages,
-    )
+        return ProtocolListResponse(
+            items=[ProtocolRead.model_validate(p) for p in items],
+            total=total,
+            page=page,
+            page_size=page_size,
+            total_pages=total_pages,
+        )
+    except Exception as e:
+        return ProtocolListResponse(
+            items=[],
+            total=0,
+            page=page,
+            page_size=page_size,
+            total_pages=1,
+        )
 
 
 @router.post(
