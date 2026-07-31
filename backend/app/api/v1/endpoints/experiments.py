@@ -162,6 +162,9 @@ async def create_experiment(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except DuplicateExperimentCode as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except Exception as e:
+        import traceback
+        raise HTTPException(status_code=500, detail=f"Create experiment error: {str(e)}\n{traceback.format_exc()[:500]}")
 
 
 @router.get(
@@ -254,6 +257,10 @@ async def update_experiment(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except InvalidExperimentStatusTransition as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        import traceback
+        tb = traceback.format_exc()
+        raise HTTPException(status_code=500, detail=f"Update experiment error: {str(e)}\n{tb}")
 
 
 @router.delete(

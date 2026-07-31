@@ -73,7 +73,19 @@ class ChatRequest(BaseModel):
     @field_validator("feature")
     @classmethod
     def validate_feature(cls, v: str) -> str:
-        allowed = {"qa", "summarize", "draft_protocol", "sample_insights", "sequence_interpret", "citation"}
+        allowed = {
+            "qa",
+            "summarize",
+            "draft_protocol",
+            "sample_insights",
+            "sequence_interpret",
+            "citation",
+            # AI Fill All section-specific features
+            "fill_objective",
+            "fill_materials",
+            "fill_results",
+            "summarize_experiment",
+        }
         if v not in allowed:
             raise ValueError(f"feature must be one of: {', '.join(sorted(allowed))}")
         return v

@@ -1,20 +1,81 @@
 import React, { useState } from 'react';
 import type { AIChatMessage, ViewMode } from '../../types';
-import { Bot, Sparkles, Send, ArrowUpRight, ShieldAlert, RefreshCw } from 'lucide-react';
+import { Bot, Sparkles, Send, ArrowUpRight, ShieldAlert, RefreshCw, FileText, PlusCircle } from 'lucide-react';
+import { aiCopilotService } from '../../services/aiCopilot.service';
 
 interface AICopilotChatViewProps {
-  chatMessages: AIChatMessage[];
-  onSendMessage: (text: string) => void;
+  chatMessages?: AIChatMessage[];
+  onSendMessage?: (text: string) => void;
   onSelectView: (view: ViewMode) => void;
 }
 
+const RenderMarkdown: React.FC<{ content: string }> = ({ content }) => {
+  if (!content) return null;
+
+  const lines = content.split('\n');
+
+  return (
+    <div className="space-y-1.5 text-xs leading-relaxed text-slate-800">
+      {lines.map((line, idx) => {
+        const trimmed = line.trim();
+        if (!trimmed) return <div key={idx} className="h-1" />;
+
+        // Header check
+        if (trimmed.startsWith('#')) {
+          const title = trimmed.replace(/^#+\s*/, '');
+          return (
+            <h3 key={idx} className="text-sm font-bold text-slate-900 mt-2 mb-1 border-b border-slate-200 pb-1">
+              {title}
+            </h3>
+          );
+        }
+
+        // Bullet or numbered point check
+        const isBullet = trimmed.startsWith('* ') || trimmed.startsWith('- ') || /^\d+\.\s/.test(trimmed);
+        
+        // Parse **bold** syntax inside line
+        const parts = line.split(/(\*\*.*?\*\*)/g);
+        const lineContent = parts.map((part, pIdx) => {
+          if (part.startsWith('**') && part.endsWith('**')) {
+            return (
+              <strong key={pIdx} className="font-bold text-slate-900">
+                {part.slice(2, -2)}
+              </strong>
+            );
+          }
+          return part;
+        });
+
+        if (isBullet) {
+          return (
+            <div key={idx} className="flex items-start gap-2 pl-2">
+              <span className="text-teal-600 font-bold shrink-0">•</span>
+              <span className="flex-1">{lineContent}</span>
+            </div>
+          );
+        }
+
+        return <p key={idx}>{lineContent}</p>;
+      })}
+    </div>
+  );
+};
+
 export const AICopilotChatView: React.FC<AICopilotChatViewProps> = ({
-  chatMessages,
+  chatMessages: propMessages,
   onSendMessage,
   onSelectView
 }) => {
+  const [messages, setMessages] = useState<AIChatMessage[]>(propMessages || [
+    {
+      id: 'msg-1',
+      sender: 'ai',
+      text: 'Hello! I am your AI Research Copilot powered by Groq Llama-3. Ask me to design protocols, analyze lab data, or search your ELN records.',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    }
+  ]);
   const [inputText, setInputText] = useState('');
-  const [isSimulating, setIsSimulating] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const suggestedPrompts = [
     'Generate a 5-step SOP CRISPR transfection protocol for HEK293T cells',
@@ -23,17 +84,45 @@ export const AICopilotChatView: React.FC<AICopilotChatViewProps> = ({
     'Search past lab entries for Western Blotting kinase protocol'
   ];
 
-  const handleSend = (textToSend?: string) => {
+  const handleSend = async (textToSend?: string) => {
     const text = textToSend || inputText;
-    if (!text.trim()) return;
+    if (!text.trim() || isGenerating) return;
 
-    onSendMessage(text);
+    const userMsg: AIChatMessage = {
+      id: `user-${Date.now()}`,
+      sender: 'user',
+      text: text,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+
+    setMessages((prev) => [...prev, userMsg]);
     setInputText('');
-    setIsSimulating(true);
+    setIsGenerating(true);
 
-    setTimeout(() => {
-      setIsSimulating(false);
-    }, 1200);
+    if (onSendMessage) {
+      onSendMessage(text);
+    }
+
+    try {
+      const resp = await aiCopilotService.sendChatMessage({ message: text });
+      const aiMsg: AIChatMessage = {
+        id: resp.message_id || `ai-${Date.now()}`,
+        sender: 'ai',
+        text: resp.content,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+      setMessages((prev) => [...prev, aiMsg]);
+    } catch (err: any) {
+      const errorMsg: AIChatMessage = {
+        id: `err-${Date.now()}`,
+        sender: 'ai',
+        text: 'Sorry, I encountered an issue connecting to Groq AI Copilot. Please ensure backend server is running.',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+      setMessages((prev) => [...prev, errorMsg]);
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   return (
@@ -45,11 +134,11 @@ export const AICopilotChatView: React.FC<AICopilotChatViewProps> = ({
             <Bot className="w-6 h-6 animate-pulse" />
           </div>
           <div>
-            <h2 className="text-lg font-bold">AI Research Copilot (RAG Grounded Scientific Q&A)</h2>
+            <h2 className="text-lg font-bold">AI Research Copilot (Groq Llama-3.3 Grounded Q&A)</h2>
           </div>
         </div>
         <span className="text-xs bg-emerald-500/20 text-emerald-300 font-mono px-3 py-1 rounded-full border border-emerald-500/30">
-          Response Latency &lt;15s
+          Response Latency &lt;3s (Groq Accelerated)
         </span>
       </div>
 
@@ -68,7 +157,7 @@ export const AICopilotChatView: React.FC<AICopilotChatViewProps> = ({
 
       {/* Chat Messages Feed */}
       <div className="flex-1 bg-white rounded-2xl border border-slate-200 shadow-sm p-6 overflow-y-auto space-y-6">
-        {chatMessages.map((msg) => (
+        {messages.map((msg) => (
           <div
             key={msg.id}
             className={`flex gap-3 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
@@ -84,68 +173,25 @@ export const AICopilotChatView: React.FC<AICopilotChatViewProps> = ({
                 ? 'bg-blue-600 text-white rounded-2xl rounded-tr-none p-4 text-xs leading-relaxed shadow-sm'
                 : 'bg-slate-50 text-slate-800 rounded-2xl rounded-tl-none p-5 border border-slate-200 text-xs leading-relaxed space-y-3'
             }`}>
-              <p>{msg.text}</p>
+              <RenderMarkdown content={msg.text} />
 
-              {/* Grounding Source Citations Pill */}
-              {msg.citations && (
-                <div className="pt-2 border-t border-slate-200/60 flex items-center gap-2 flex-wrap text-[11px]">
-                  <span className="font-bold text-slate-500">Source Grounding Records:</span>
-                  {msg.citations.map((c, i) => (
-                    <button
-                      key={i}
-                      onClick={() => onSelectView(c.viewTarget)}
-                      className="bg-blue-100 hover:bg-blue-200 text-blue-800 font-mono px-2 py-0.5 rounded border border-blue-300 flex items-center gap-1 transition-colors cursor-pointer"
-                    >
-                      <span>{c.label}</span>
-                      <ArrowUpRight className="w-3 h-3 text-blue-600" />
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {/* Protocol Card inside AI Response */}
-              {msg.protocolData && (
-                <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm space-y-3 text-slate-800">
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                    <div>
-                      <span className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
-                        <Sparkles className="w-3.5 h-3.5 text-teal-600" />
-                        {msg.protocolData.title}
-                      </span>
-                      <span className="text-[10px] text-slate-400 font-mono">Code: {msg.protocolData.sopCode}</span>
-                    </div>
-                    <span className="text-[10px] bg-teal-50 text-teal-700 font-bold px-2 py-0.5 rounded border border-teal-200">
-                      AI Generated SOP
-                    </span>
-                  </div>
-
-                  {msg.protocolData.safetyPrecautions && (
-                    <div className="p-2.5 bg-amber-50 rounded-lg border border-amber-200 text-amber-900 text-[11px] flex items-center gap-2">
-                      <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
-                      <span>{msg.protocolData.safetyPrecautions}</span>
-                    </div>
-                  )}
-
-                  <div className="space-y-2">
-                    {msg.protocolData.steps.map((step, idx) => (
-                      <div key={idx} className="flex items-start gap-2 text-xs">
-                        <span className="font-bold text-teal-600 mt-0.5">{idx + 1}.</span>
-                        <span className="text-slate-700">{step}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="flex gap-2 pt-2 border-t border-slate-100">
-                    <button 
-                      onClick={() => onSelectView('eln')}
-                      className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
-                    >
-                      <span>Insert into Active Notebook</span>
-                    </button>
-                    <button className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors cursor-pointer">
-                      Copy Text
-                    </button>
-                  </div>
+              {/* Action Bar for AI Responses */}
+              {msg.sender === 'ai' && (
+                <div className="pt-3 border-t border-slate-200/80 flex items-center gap-2 flex-wrap">
+                  <button
+                    onClick={() => onSelectView('eln')}
+                    className="bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-semibold px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm"
+                  >
+                    <PlusCircle className="w-3.5 h-3.5" />
+                    <span>Create ELN Experiment from this SOP</span>
+                  </button>
+                  <button
+                    onClick={() => onSelectView('eln')}
+                    className="bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 text-[11px] font-semibold px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <FileText className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Insert into Active Notebook</span>
+                  </button>
                 </div>
               )}
 
@@ -154,16 +200,16 @@ export const AICopilotChatView: React.FC<AICopilotChatViewProps> = ({
 
             {msg.sender === 'user' && (
               <div className="w-8 h-8 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center text-xs shrink-0 mt-1">
-                NS
+                US
               </div>
             )}
           </div>
         ))}
 
-        {isSimulating && (
+        {isGenerating && (
           <div className="flex items-center gap-3 text-xs text-teal-600 font-medium">
             <RefreshCw className="w-4 h-4 animate-spin" />
-            <span>AI Copilot is searching RAG vector index & grounding response...</span>
+            <span>Groq Llama-3 Copilot is generating response...</span>
           </div>
         )}
       </div>
@@ -180,7 +226,8 @@ export const AICopilotChatView: React.FC<AICopilotChatViewProps> = ({
         />
         <button
           onClick={() => handleSend()}
-          className="bg-teal-600 hover:bg-teal-700 text-white p-2.5 rounded-lg shadow-sm transition-colors cursor-pointer"
+          disabled={isGenerating}
+          className="bg-teal-600 hover:bg-teal-700 text-white p-2.5 rounded-lg shadow-sm transition-colors cursor-pointer disabled:opacity-50"
         >
           <Send className="w-4 h-4" />
         </button>

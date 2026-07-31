@@ -47,31 +47,31 @@ export const canViewViewMode = (user: User | null, view: ViewMode): boolean => {
 
   // Viewer: Read-only access to View Dashboard, View Projects, View Experiments
   if (role === 'Viewer') {
-    return ['dashboard', 'projects', 'eln'].includes(view);
+    return ['dashboard', 'projects', 'project_detail', 'experiments', 'eln'].includes(view);
   }
 
   // QA: Read-only access to Dashboard, Projects, Experiments, Notebook, Samples, Audit Logs, Reports
   if (role === 'QA') {
-    return ['dashboard', 'projects', 'eln', 'samples', 'sample-detail', 'audit', 'reports'].includes(view);
+    return ['dashboard', 'projects', 'project_detail', 'experiments', 'eln', 'samples', 'sample-detail', 'audit', 'reports'].includes(view);
   }
 
   // Bioinformatician: Dashboard, Projects, Sequence Management, Sample Registry, View Experiments
   if (role === 'Bioinformatician') {
     return [
-      'dashboard', 'projects', 'sequences', 'sequence-registry', 'sequence-detail',
+      'dashboard', 'projects', 'project_detail', 'experiments', 'sequences', 'sequence-registry', 'sequence-detail',
       'samples', 'sample-detail', 'eln', 'ai-copilot', 'search', 'reports', 'settings'
     ].includes(view);
   }
 
   // Lab Technician: Dashboard, Experiments (eln), Samples, Inventory, Settings
   if (role === 'Lab Technician') {
-    return ['dashboard', 'eln', 'samples', 'sample-detail', 'inventory', 'settings'].includes(view);
+    return ['dashboard', 'experiments', 'eln', 'samples', 'sample-detail', 'inventory', 'settings'].includes(view);
   }
 
   // Researcher: Dashboard, Assigned Projects, Experiments, Notebook, Samples, Protocols
   if (role === 'Researcher') {
     return [
-      'dashboard', 'projects', 'eln', 'samples', 'sample-detail',
+      'dashboard', 'projects', 'project_detail', 'experiments', 'eln', 'samples', 'sample-detail',
       'inventory', 'protocols', 'protocol-detail', 'instruments', 'instrument-detail',
       'sequences', 'sequence-registry', 'sequence-detail', 'ai-copilot', 'search', 'settings'
     ].includes(view);
@@ -80,7 +80,7 @@ export const canViewViewMode = (user: User | null, view: ViewMode): boolean => {
   // PI (Project Owner): Dashboard, Projects, Experiments, Notebook, Samples, Protocols, Reports
   if (role === 'PI') {
     return [
-      'dashboard', 'projects', 'eln', 'samples', 'sample-detail',
+      'dashboard', 'projects', 'project_detail', 'experiments', 'eln', 'samples', 'sample-detail',
       'protocols', 'protocol-detail', 'reports', 'ai-copilot', 'search', 'settings'
     ].includes(view);
   }

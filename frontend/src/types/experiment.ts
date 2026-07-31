@@ -59,8 +59,8 @@ export interface ExperimentCreate {
   start_date?: string | null;
   planned_end_date?: string | null;
   metadata_json?: Record<string, any>;
-  project_id: string;
-  organization_id: string;
+  project_id?: string | null;
+  organization_id?: string | null;
   owner_id?: string | null;
   reviewer_id?: string | null;
 }

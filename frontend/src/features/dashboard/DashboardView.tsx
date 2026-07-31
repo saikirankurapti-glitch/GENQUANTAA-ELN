@@ -140,7 +140,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <p className="text-xs text-slate-500">Live feed of active notebook entries and protocol updates</p>
             </div>
             <button 
-              onClick={() => onSelectView('eln')}
+              onClick={() => onSelectView('experiments')}
               className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1 cursor-pointer"
             >
               <span>View All</span>

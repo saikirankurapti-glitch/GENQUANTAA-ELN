@@ -173,7 +173,8 @@ SYSTEM_PROMPTS: Dict[str, str] = {
     ),
     "draft_protocol": (
         "You are a senior lab scientist. Draft clear, numbered SOPs with safety notes, "
-        "reagent lists, equipment requirements, and step-by-step procedures."
+        "reagent lists, equipment requirements, and step-by-step procedures. "
+        "Output only the numbered steps, one per line."
     ),
     "sample_insights": (
         "You are a laboratory data analyst. Interpret sample metadata, quality metrics, "
@@ -187,7 +188,33 @@ SYSTEM_PROMPTS: Dict[str, str] = {
         "You are a scientific literature specialist. Generate accurate citations "
         "in APA format for the provided source documents."
     ),
+    # AI Fill All section-specific prompts
+    "fill_objective": (
+        "You are a scientific research assistant helping fill an ELN experiment notebook. "
+        "Write a clear, concise scientific objective and hypothesis. "
+        "Output plain text only — no markdown, no bullet points, no headers. "
+        "3-4 sentences maximum."
+    ),
+    "fill_materials": (
+        "You are a laboratory materials specialist. "
+        "Generate a reagents and materials list for a lab experiment. "
+        "Return ONLY a valid JSON array with objects: [{\"name\": str, \"quantity\": str, \"lotNumber\": str}]. "
+        "No explanations, no markdown, no code fences — just the raw JSON array."
+    ),
+    "fill_results": (
+        "You are a scientific results analyst helping fill an ELN experiment notebook. "
+        "Draft expected observations and measurable experimental results. "
+        "Output plain text only — no markdown, no bullet points, no headers. "
+        "2-3 sentences maximum."
+    ),
+    "summarize_experiment": (
+        "You are a scientific writing assistant specializing in ELN experiment summaries. "
+        "Write a structured scientific summary with these four sections: "
+        "1. Background, 2. Methods Summary, 3. Key Findings, 4. Conclusions. "
+        "Keep each section to 1-2 sentences. Use plain numbered headings only."
+    ),
 }
+
 
 
 # ── Service ────────────────────────────────────────────────────────────────────

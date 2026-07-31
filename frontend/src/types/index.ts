@@ -3,6 +3,8 @@ export type ViewMode =
   | 'login'
   | 'dashboard'
   | 'projects'
+  | 'project_detail'
+  | 'experiments'
   | 'eln'
   | 'samples'
   | 'sample-detail'

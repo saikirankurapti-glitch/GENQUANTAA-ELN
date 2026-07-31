@@ -82,7 +82,7 @@ class ProjectArchiveRequest(BaseModel):
 class ProjectRead(ProjectBase):
     id: UUID = Field(..., description="Project unique identifier")
     tenant_id: UUID = Field(..., description="Tenant workspace identifier")
-    organization_id: UUID = Field(..., description="Organization identifier")
+    organization_id: Optional[UUID] = Field(None, description="Organization identifier")
     owner_id: Optional[UUID] = Field(None, description="Owner user identifier")
     completed_date: Optional[date] = Field(None, description="Actual project completion date")
     is_archived: bool = Field(False, description="Archive flag")

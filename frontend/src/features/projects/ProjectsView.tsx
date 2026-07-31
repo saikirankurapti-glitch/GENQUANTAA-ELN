@@ -6,14 +6,15 @@ import { useAuth } from '../../providers/AuthProvider';
 
 interface ProjectsViewProps {
   onSelectView: (view: ViewMode) => void;
+  onOpenProject?: (projectId: string) => void;
 }
 
-export const ProjectsView: React.FC<ProjectsViewProps> = ({ onSelectView }) => {
+export const ProjectsView: React.FC<ProjectsViewProps> = ({ onSelectView, onOpenProject }) => {
   const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<string>(''); // '' means All
   const [page, setPage] = useState(1);
-  const pageSize = 20;
+  const pageSize = 12;
 
   const { data: projectsData, isLoading, error } = useProjects(
     page, 
@@ -40,10 +41,9 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onSelectView }) => {
         project_code: newCode,
         name: newTitle,
         description: newDesc,
-        status: 'ACTIVE',
+        status: 'active',
         tags: newTags ? newTags.split(',').map(t => t.trim()) : ['New Project'],
         organization_id: user?.organization_id || user?.tenant_id || '00000000-0000-0000-0000-000000000000',
-        owner_id: user?.id,
         visibility: 'PRIVATE'
       });
       setNewTitle('');
@@ -158,7 +158,13 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onSelectView }) => {
                   </div>
 
                   <button
-                    onClick={() => onSelectView('eln')}
+                    onClick={() => {
+                      if (onOpenProject) {
+                        onOpenProject(project.id);
+                      } else {
+                        onSelectView('eln');
+                      }
+                    }}
                     className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1 group cursor-pointer"
                   >
                     <span>Open Space</span>

@@ -37,8 +37,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSaveUser }) => {
 
   const initials = getUserInitials(user, displayName);
   const role = getUserRole(user);
-  const organizationName = user?.organization_name || 'Enterprise R&D Discovery Org';
-  const tenantName = user?.tenant_name || 'Default Master Tenant Scope';
+  const organizationName = (user as any)?.organization_name || 'Enterprise R&D Discovery Org';
+  const tenantName = (user as any)?.tenant_name || 'Default Master Tenant Scope';
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();

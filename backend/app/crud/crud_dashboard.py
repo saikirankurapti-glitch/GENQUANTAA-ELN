@@ -10,7 +10,9 @@ from app.db.enums import ExperimentStatus, ProjectStatus
 from app.models.compliance import AuditLog
 from app.models.dashboard import Notification
 from app.models.identity import User
-from app.models.research import Experiment, Project, Study
+from app.models.project import Project
+from app.models.experiment import Experiment
+from app.models.research import Study
 
 logger = logging.getLogger(__name__)
 
@@ -20,33 +22,27 @@ class DashboardRepository:
 
     async def get_project_count(self, db: AsyncSession, *, tenant_id: UUID) -> int:
         """Count active non-deleted projects for tenant."""
-        stmt = select(func.count()).select_from(Project).where(
-            Project.tenant_id == tenant_id,
-            Project.is_deleted == False
-        )
-        res = await db.execute(stmt)
-        return res.scalar_one() or 0
+        return await Project.find(Project.tenant_id == tenant_id, Project.is_deleted != True).count()
 
     async def get_experiment_counts(self, db: AsyncSession, *, tenant_id: UUID) -> Tuple[int, int]:
         """
         Count active vs completed experiments within tenant scope.
         Returns (active_count, completed_count).
         """
-        base_stmt = select(Experiment).where(
-            Experiment.tenant_id == tenant_id, Experiment.is_deleted == False
-        )
-
-        # Active status values
         active_statuses = [ExperimentStatus.DRAFT, ExperimentStatus.IN_PROGRESS, ExperimentStatus.SUBMITTED]
-        active_stmt = select(func.count()).select_from(base_stmt.where(Experiment.status.in_(active_statuses)).subquery())
-        active_res = await db.execute(active_stmt)
-        active_count = active_res.scalar_one() or 0
+        from beanie.operators import In
+        active_count = await Experiment.find(
+            Experiment.tenant_id == tenant_id, 
+            Experiment.is_deleted != True, 
+            In(Experiment.status, active_statuses)
+        ).count()
 
-        # Completed status values
         completed_statuses = [ExperimentStatus.APPROVED, ExperimentStatus.COMPLETED, ExperimentStatus.ARCHIVED]
-        completed_stmt = select(func.count()).select_from(base_stmt.where(Experiment.status.in_(completed_statuses)).subquery())
-        completed_res = await db.execute(completed_stmt)
-        completed_count = completed_res.scalar_one() or 0
+        completed_count = await Experiment.find(
+            Experiment.tenant_id == tenant_id, 
+            Experiment.is_deleted != True, 
+            In(Experiment.status, completed_statuses)
+        ).count()
 
         return active_count, completed_count
 
@@ -54,14 +50,10 @@ class DashboardRepository:
         self, db: AsyncSession, *, tenant_id: UUID, limit: int = 5
     ) -> List[Experiment]:
         """Fetch top N recent experiments within tenant."""
-        stmt = (
-            select(Experiment)
-            .where(Experiment.tenant_id == tenant_id, Experiment.is_deleted == False)
-            .order_by(Experiment.updated_at.desc())
-            .limit(limit)
-        )
-        res = await db.execute(stmt)
-        return list(res.scalars().all())
+        return await Experiment.find(
+            Experiment.tenant_id == tenant_id, 
+            Experiment.is_deleted != True
+        ).sort("-updated_at").limit(limit).to_list()
 
     async def get_pending_notifications(
         self, db: AsyncSession, *, tenant_id: UUID, user_id: UUID, limit: int = 5

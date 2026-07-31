@@ -61,9 +61,9 @@ class ProjectService:
         self, db: AsyncSession, *, obj_in: ProjectCreate, tenant_id: UUID, current_user: User
     ) -> Project:
         """Create a new project ensuring code uniqueness."""
-        code = getattr(obj_in, "code", getattr(obj_in, "project_code", "PRJ-001"))
+        code = getattr(obj_in, "project_code", "PRJ-001")
         name = getattr(obj_in, "name", getattr(obj_in, "title", "New Project"))
-        existing = await Project.find_one({"code": code, "tenant_id": tenant_id, "is_deleted": False})
+        existing = await Project.find_one({"project_code": code, "tenant_id": tenant_id, "is_deleted": False})
         if existing:
             raise DuplicateProjectCode(f"Project code '{code}' already exists in this tenant.")
 
@@ -71,13 +71,19 @@ class ProjectService:
             tenant_id=tenant_id,
             owner_id=current_user.id,
             name=name,
-            code=code,
+            project_code=code,
             description=obj_in.description,
             status=getattr(obj_in, "status", ProjectStatus.PLANNED),
             priority=getattr(obj_in, "priority", "MEDIUM"),
+            tags=getattr(obj_in, "tags", []),
+            visibility=getattr(obj_in, "visibility", "PRIVATE"),
+            objective=getattr(obj_in, "objective", None),
+            organization_id=getattr(obj_in, "organization_id", None),
+            target_end_date=getattr(obj_in, "target_end_date", None),
+            metadata_json=getattr(obj_in, "metadata_json", {})
         )
         await project.insert()
-        logger.info(f"ProjectService: Created project '{project.code}' (ID: {project.id})")
+        logger.info(f"ProjectService: Created project '{project.project_code}' (ID: {project.id})")
         return project
 
     async def get_project(
@@ -166,12 +172,21 @@ class ProjectService:
         pagination: ProjectPagination
     ) -> Tuple[List[Project], int]:
         """List projects with filtering and pagination."""
-        query = {"tenant_id": tenant_id, "is_deleted": False}
+        query_conditions = [
+            Project.tenant_id == tenant_id,
+            Project.is_deleted == False
+        ]
+        
         if filter_params and filter_params.search:
-            query["name"] = {"$regex": filter_params.search, "$options": "i"}
-        total = await Project.find(query).count()
+            from beanie.operators import RegEx
+            query_conditions.append(RegEx(Project.name, filter_params.search, "i"))
+            
+        if filter_params and filter_params.status:
+            query_conditions.append(Project.status == filter_params.status.value)
+            
+        total = await Project.find(*query_conditions).count()
         skip = (pagination.page - 1) * pagination.page_size
-        items = await Project.find(query).skip(skip).limit(pagination.page_size).to_list()
+        items = await Project.find(*query_conditions).skip(skip).limit(pagination.page_size).to_list()
         return items, total
 
 

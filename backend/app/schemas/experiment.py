@@ -57,7 +57,7 @@ class ExperimentBase(BaseModel):
 
 
 class ExperimentCreate(ExperimentBase):
-    project_id: UUID = Field(..., description="Parent Project identifier")
+    project_id: Optional[UUID] = Field(None, description="Parent Project identifier (optional - defaults to tenant workspace)")
     organization_id: Optional[UUID] = Field(None, description="Target Organization identifier")
     owner_id: Optional[UUID] = Field(None, description="Owner / Lead Scientist user identifier")
     reviewer_id: Optional[UUID] = Field(None, description="Designated Reviewer user identifier")
@@ -86,7 +86,7 @@ class ExperimentArchiveRequest(BaseModel):
 class ExperimentRead(ExperimentBase):
     id: UUID = Field(..., description="Experiment unique identifier")
     tenant_id: UUID = Field(..., description="Tenant workspace identifier")
-    organization_id: UUID = Field(..., description="Organization identifier")
+    organization_id: Optional[UUID] = Field(None, description="Organization identifier")
     project_id: UUID = Field(..., description="Parent project identifier")
     owner_id: Optional[UUID] = Field(None, description="Owner user identifier")
     reviewer_id: Optional[UUID] = Field(None, description="Reviewer user identifier")

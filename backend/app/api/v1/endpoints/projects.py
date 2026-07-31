@@ -83,6 +83,8 @@ async def list_projects(
             total_pages=total_pages,
         )
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return ProjectListResponse(
             items=[],
             total=0,
