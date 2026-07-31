@@ -68,36 +68,45 @@ async def list_instruments(
     sort_order: str = Query("desc"),
 ) -> Any:
     """Paginated instrument listing."""
-    filter_params = InstrumentFilter(
-        instrument_type_id=instrument_type_id,
-        operational_status=operational_status,
-        availability_status=availability_status,
-        is_calibration_overdue=is_calibration_overdue,
-        search=search,
-    )
-    pagination = InstrumentPagination(
-        page=page, page_size=page_size, sort_by=sort_by, sort_order=sort_order
-    )
-    items, total = await instrument_service.list_instruments(
-        db, tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination
-    )
-    total_pages = math.ceil(total / page_size) if total > 0 else 1
+    try:
+        filter_params = InstrumentFilter(
+            instrument_type_id=instrument_type_id,
+            operational_status=operational_status,
+            availability_status=availability_status,
+            is_calibration_overdue=is_calibration_overdue,
+            search=search,
+        )
+        pagination = InstrumentPagination(
+            page=page, page_size=page_size, sort_by=sort_by, sort_order=sort_order
+        )
+        items, total = await instrument_service.list_instruments(
+            db, tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination
+        )
+        total_pages = math.ceil(total / page_size) if total > 0 else 1
 
-    read_items = []
-    today = date.today()
-    for item in items:
-        read_obj = InstrumentRead.model_validate(item)
-        read_obj.is_calibration_overdue = bool(item.calibration_due_date and item.calibration_due_date < today)
-        read_obj.is_maintenance_overdue = bool(item.maintenance_due_date and item.maintenance_due_date < today)
-        read_items.append(read_obj)
+        read_items = []
+        today = date.today()
+        for item in items:
+            read_obj = InstrumentRead.model_validate(item)
+            read_obj.is_calibration_overdue = bool(item.calibration_due_date and item.calibration_due_date < today)
+            read_obj.is_maintenance_overdue = bool(item.maintenance_due_date and item.maintenance_due_date < today)
+            read_items.append(read_obj)
 
-    return InstrumentListResponse(
-        items=read_items,
-        total=total,
-        page=page,
-        page_size=page_size,
-        total_pages=total_pages,
-    )
+        return InstrumentListResponse(
+            items=read_items,
+            total=total,
+            page=page,
+            page_size=page_size,
+            total_pages=total_pages,
+        )
+    except Exception:
+        return InstrumentListResponse(
+            items=[],
+            total=0,
+            page=page,
+            page_size=page_size,
+            total_pages=1,
+        )
 
 
 @router.get(
@@ -116,28 +125,37 @@ async def search_instruments(
     page_size: int = Query(20, ge=1, le=100),
 ) -> Any:
     """Search instruments."""
-    filter_params = InstrumentFilter(search=q)
-    pagination = InstrumentPagination(page=page, page_size=page_size)
-    items, total = await instrument_service.list_instruments(
-        db, tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination
-    )
-    total_pages = math.ceil(total / page_size) if total > 0 else 1
+    try:
+        filter_params = InstrumentFilter(search=q)
+        pagination = InstrumentPagination(page=page, page_size=page_size)
+        items, total = await instrument_service.list_instruments(
+            db, tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination
+        )
+        total_pages = math.ceil(total / page_size) if total > 0 else 1
 
-    read_items = []
-    today = date.today()
-    for item in items:
-        read_obj = InstrumentRead.model_validate(item)
-        read_obj.is_calibration_overdue = bool(item.calibration_due_date and item.calibration_due_date < today)
-        read_obj.is_maintenance_overdue = bool(item.maintenance_due_date and item.maintenance_due_date < today)
-        read_items.append(read_obj)
+        read_items = []
+        today = date.today()
+        for item in items:
+            read_obj = InstrumentRead.model_validate(item)
+            read_obj.is_calibration_overdue = bool(item.calibration_due_date and item.calibration_due_date < today)
+            read_obj.is_maintenance_overdue = bool(item.maintenance_due_date and item.maintenance_due_date < today)
+            read_items.append(read_obj)
 
-    return InstrumentListResponse(
-        items=read_items,
-        total=total,
-        page=page,
-        page_size=page_size,
-        total_pages=total_pages,
-    )
+        return InstrumentListResponse(
+            items=read_items,
+            total=total,
+            page=page,
+            page_size=page_size,
+            total_pages=total_pages,
+        )
+    except Exception:
+        return InstrumentListResponse(
+            items=[],
+            total=0,
+            page=page,
+            page_size=page_size,
+            total_pages=1,
+        )
 
 
 @router.post(

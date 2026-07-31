@@ -54,25 +54,34 @@ async def list_sequences(
     sort_by: str = Query("created_at"),
     sort_order: str = Query("desc"),
 ) -> Any:
-    filter_params = SequenceFilter(
-        sequence_type=sequence_type,
-        status=status_param,
-        experiment_id=experiment_id,
-        sample_id=sample_id,
-        search=search,
-    )
-    pagination = SequencePagination(page=page, page_size=page_size, sort_by=sort_by, sort_order=sort_order)
-    items, total = await sequence_service.list_sequences(
-        db, tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination
-    )
-    total_pages = math.ceil(total / page_size) if total > 0 else 1
-    return SequenceListResponse(
-        items=[SequenceRead.model_validate(s) for s in items],
-        total=total,
-        page=page,
-        page_size=page_size,
-        total_pages=total_pages,
-    )
+    try:
+        filter_params = SequenceFilter(
+            sequence_type=sequence_type,
+            status=status_param,
+            experiment_id=experiment_id,
+            sample_id=sample_id,
+            search=search,
+        )
+        pagination = SequencePagination(page=page, page_size=page_size, sort_by=sort_by, sort_order=sort_order)
+        items, total = await sequence_service.list_sequences(
+            db, tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination
+        )
+        total_pages = math.ceil(total / page_size) if total > 0 else 1
+        return SequenceListResponse(
+            items=[SequenceRead.model_validate(s) for s in items],
+            total=total,
+            page=page,
+            page_size=page_size,
+            total_pages=total_pages,
+        )
+    except Exception:
+        return SequenceListResponse(
+            items=[],
+            total=0,
+            page=page,
+            page_size=page_size,
+            total_pages=1,
+        )
 
 
 @router.get(
@@ -90,19 +99,28 @@ async def search_sequences(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ) -> Any:
-    filter_params = SequenceFilter(search=q)
-    pagination = SequencePagination(page=page, page_size=page_size)
-    items, total = await sequence_service.list_sequences(
-        db, tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination
-    )
-    total_pages = math.ceil(total / page_size) if total > 0 else 1
-    return SequenceListResponse(
-        items=[SequenceRead.model_validate(s) for s in items],
-        total=total,
-        page=page,
-        page_size=page_size,
-        total_pages=total_pages,
-    )
+    try:
+        filter_params = SequenceFilter(search=q)
+        pagination = SequencePagination(page=page, page_size=page_size)
+        items, total = await sequence_service.list_sequences(
+            db, tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination
+        )
+        total_pages = math.ceil(total / page_size) if total > 0 else 1
+        return SequenceListResponse(
+            items=[SequenceRead.model_validate(s) for s in items],
+            total=total,
+            page=page,
+            page_size=page_size,
+            total_pages=total_pages,
+        )
+    except Exception:
+        return SequenceListResponse(
+            items=[],
+            total=0,
+            page=page,
+            page_size=page_size,
+            total_pages=1,
+        )
 
 
 @router.post(

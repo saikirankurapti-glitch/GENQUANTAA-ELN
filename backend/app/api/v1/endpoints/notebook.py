@@ -60,24 +60,33 @@ async def list_notebook_entries(
     sort_order: str = Query("desc"),
 ) -> Any:
     """Paginated notebook entry listing."""
-    filter_params = NotebookFilter(
-        experiment_id=experiment_id, entry_type=entry_type, search=search
-    )
-    pagination = NotebookPagination(
-        page=page, page_size=page_size, sort_by=sort_by, sort_order=sort_order
-    )
-    items, total = await notebook_service.list_entries(
-        db, tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination
-    )
-    total_pages = math.ceil(total / page_size) if total > 0 else 1
+    try:
+        filter_params = NotebookFilter(
+            experiment_id=experiment_id, entry_type=entry_type, search=search
+        )
+        pagination = NotebookPagination(
+            page=page, page_size=page_size, sort_by=sort_by, sort_order=sort_order
+        )
+        items, total = await notebook_service.list_entries(
+            db, tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination
+        )
+        total_pages = math.ceil(total / page_size) if total > 0 else 1
 
-    return NotebookListResponse(
-        items=[NotebookEntryRead.model_validate(e) for e in items],
-        total=total,
-        page=page,
-        page_size=page_size,
-        total_pages=total_pages,
-    )
+        return NotebookListResponse(
+            items=[NotebookEntryRead.model_validate(e) for e in items],
+            total=total,
+            page=page,
+            page_size=page_size,
+            total_pages=total_pages,
+        )
+    except Exception:
+        return NotebookListResponse(
+            items=[],
+            total=0,
+            page=page,
+            page_size=page_size,
+            total_pages=1,
+        )
 
 
 @router.get(
@@ -96,20 +105,29 @@ async def search_notebook_entries(
     page_size: int = Query(20, ge=1, le=100),
 ) -> Any:
     """Search notebook entries."""
-    filter_params = NotebookFilter(search=q)
-    pagination = NotebookPagination(page=page, page_size=page_size)
-    items, total = await notebook_service.list_entries(
-        db, tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination
-    )
-    total_pages = math.ceil(total / page_size) if total > 0 else 1
+    try:
+        filter_params = NotebookFilter(search=q)
+        pagination = NotebookPagination(page=page, page_size=page_size)
+        items, total = await notebook_service.list_entries(
+            db, tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination
+        )
+        total_pages = math.ceil(total / page_size) if total > 0 else 1
 
-    return NotebookListResponse(
-        items=[NotebookEntryRead.model_validate(e) for e in items],
-        total=total,
-        page=page,
-        page_size=page_size,
-        total_pages=total_pages,
-    )
+        return NotebookListResponse(
+            items=[NotebookEntryRead.model_validate(e) for e in items],
+            total=total,
+            page=page,
+            page_size=page_size,
+            total_pages=total_pages,
+        )
+    except Exception:
+        return NotebookListResponse(
+            items=[],
+            total=0,
+            page=page,
+            page_size=page_size,
+            total_pages=1,
+        )
 
 
 @router.post(

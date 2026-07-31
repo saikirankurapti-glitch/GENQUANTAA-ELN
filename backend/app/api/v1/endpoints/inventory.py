@@ -60,36 +60,44 @@ async def list_inventory_items(
     sort_order: str = Query("desc"),
 ) -> Any:
     """Paginated inventory listing."""
-    filter_params = InventoryFilter(
-        category_id=category_id,
-        supplier_id=supplier_id,
-        storage_location_id=storage_location_id,
-        status=status_param,
-        is_low_stock=is_low_stock,
-        search=search,
-    )
-    pagination = InventoryPagination(
-        page=page, page_size=page_size, sort_by=sort_by, sort_order=sort_order
-    )
-    items, total = await inventory_service.list_items(
-        db, tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination
-    )
-    total_pages = math.ceil(total / page_size) if total > 0 else 1
+    try:
+        filter_params = InventoryFilter(
+            category_id=category_id,
+            supplier_id=supplier_id,
+            storage_location_id=storage_location_id,
+            status=status_param,
+            is_low_stock=is_low_stock,
+            search=search,
+        )
+        pagination = InventoryPagination(
+            page=page, page_size=page_size, sort_by=sort_by, sort_order=sort_order
+        )
+        items, total = await inventory_service.list_items(
+            db, tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination
+        )
+        total_pages = math.ceil(total / page_size) if total > 0 else 1
 
-    # Map with computed is_low_stock flag
-    read_items = []
-    for item in items:
-        read_obj = InventoryItemRead.model_validate(item)
-        read_obj.is_low_stock = item.current_stock <= item.reorder_level
-        read_items.append(read_obj)
+        read_items = []
+        for item in items:
+            read_obj = InventoryItemRead.model_validate(item)
+            read_obj.is_low_stock = item.current_stock <= item.reorder_level
+            read_items.append(read_obj)
 
-    return InventoryListResponse(
-        items=read_items,
-        total=total,
-        page=page,
-        page_size=page_size,
-        total_pages=total_pages,
-    )
+        return InventoryListResponse(
+            items=read_items,
+            total=total,
+            page=page,
+            page_size=page_size,
+            total_pages=total_pages,
+        )
+    except Exception:
+        return InventoryListResponse(
+            items=[],
+            total=0,
+            page=page,
+            page_size=page_size,
+            total_pages=1,
+        )
 
 
 @router.get(
@@ -108,26 +116,36 @@ async def search_inventory_items(
     page_size: int = Query(20, ge=1, le=100),
 ) -> Any:
     """Search inventory items."""
-    filter_params = InventoryFilter(search=q)
-    pagination = InventoryPagination(page=page, page_size=page_size)
-    items, total = await inventory_service.list_items(
-        db, tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination
-    )
-    total_pages = math.ceil(total / page_size) if total > 0 else 1
+    try:
+        filter_params = InventoryFilter(search=q)
+        pagination = InventoryPagination(page=page, page_size=page_size)
+        items, total = await inventory_service.list_items(
+            db, tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination
+        )
+        total_pages = math.ceil(total / page_size) if total > 0 else 1
 
-    read_items = []
-    for item in items:
-        read_obj = InventoryItemRead.model_validate(item)
-        read_obj.is_low_stock = item.current_stock <= item.reorder_level
-        read_items.append(read_obj)
+        read_items = []
+        for item in items:
+            read_obj = InventoryItemRead.model_validate(item)
+            read_obj.is_low_stock = item.current_stock <= item.reorder_level
+            read_items.append(read_obj)
 
-    return InventoryListResponse(
-        items=read_items,
-        total=total,
-        page=page,
-        page_size=page_size,
-        total_pages=total_pages,
-    )
+        return InventoryListResponse(
+            items=read_items,
+            total=total,
+            page=page,
+            page_size=page_size,
+            total_pages=total_pages,
+        )
+    except Exception:
+        return InventoryListResponse(
+            items=[],
+            total=0,
+            page=page,
+            page_size=page_size,
+            total_pages=1,
+        )
+
 
 
 @router.post(

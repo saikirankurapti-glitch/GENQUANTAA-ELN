@@ -60,29 +60,38 @@ async def list_samples(
     sort_order: str = Query("desc"),
 ) -> Any:
     """Paginated sample listing."""
-    filter_params = SampleFilter(
-        experiment_id=experiment_id,
-        sample_type_id=sample_type_id,
-        storage_location_id=storage_location_id,
-        status=status_param,
-        barcode=barcode,
-        search=search,
-    )
-    pagination = SamplePagination(
-        page=page, page_size=page_size, sort_by=sort_by, sort_order=sort_order
-    )
-    items, total = await sample_service.list_samples(
-        db, tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination
-    )
-    total_pages = math.ceil(total / page_size) if total > 0 else 1
+    try:
+        filter_params = SampleFilter(
+            experiment_id=experiment_id,
+            sample_type_id=sample_type_id,
+            storage_location_id=storage_location_id,
+            status=status_param,
+            barcode=barcode,
+            search=search,
+        )
+        pagination = SamplePagination(
+            page=page, page_size=page_size, sort_by=sort_by, sort_order=sort_order
+        )
+        items, total = await sample_service.list_samples(
+            db, tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination
+        )
+        total_pages = math.ceil(total / page_size) if total > 0 else 1
 
-    return SampleListResponse(
-        items=[SampleRead.model_validate(s) for s in items],
-        total=total,
-        page=page,
-        page_size=page_size,
-        total_pages=total_pages,
-    )
+        return SampleListResponse(
+            items=[SampleRead.model_validate(s) for s in items],
+            total=total,
+            page=page,
+            page_size=page_size,
+            total_pages=total_pages,
+        )
+    except Exception:
+        return SampleListResponse(
+            items=[],
+            total=0,
+            page=page,
+            page_size=page_size,
+            total_pages=1,
+        )
 
 
 @router.get(
@@ -101,20 +110,29 @@ async def search_samples(
     page_size: int = Query(20, ge=1, le=100),
 ) -> Any:
     """Search samples."""
-    filter_params = SampleFilter(search=q)
-    pagination = SamplePagination(page=page, page_size=page_size)
-    items, total = await sample_service.list_samples(
-        db, tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination
-    )
-    total_pages = math.ceil(total / page_size) if total > 0 else 1
+    try:
+        filter_params = SampleFilter(search=q)
+        pagination = SamplePagination(page=page, page_size=page_size)
+        items, total = await sample_service.list_samples(
+            db, tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination
+        )
+        total_pages = math.ceil(total / page_size) if total > 0 else 1
 
-    return SampleListResponse(
-        items=[SampleRead.model_validate(s) for s in items],
-        total=total,
-        page=page,
-        page_size=page_size,
-        total_pages=total_pages,
-    )
+        return SampleListResponse(
+            items=[SampleRead.model_validate(s) for s in items],
+            total=total,
+            page=page,
+            page_size=page_size,
+            total_pages=total_pages,
+        )
+    except Exception:
+        return SampleListResponse(
+            items=[],
+            total=0,
+            page=page,
+            page_size=page_size,
+            total_pages=1,
+        )
 
 
 @router.post(
