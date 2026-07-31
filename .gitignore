@@ -11,6 +11,7 @@ env/
 ENV/
 __pycache__/
 *.pyc
+!backend/app/models/*.pyc
 *.pyo
 *.pyd
 .pytest_cache/
