@@ -91,7 +91,7 @@ export const ExperimentsListView: React.FC<ExperimentsListViewProps> = ({
 
   // Combine API items with fallback demo items if API returns empty list
   const displayItems = useMemo(() => {
-    let items = (experimentsData?.items && experimentsData.items.length > 0)
+    let items: any[] = (experimentsData?.items && experimentsData.items.length > 0)
       ? experimentsData.items
       : DEFAULT_SAMPLE_EXPERIMENTS;
 
