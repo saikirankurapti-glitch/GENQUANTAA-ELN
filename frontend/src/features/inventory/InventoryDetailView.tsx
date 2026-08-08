@@ -18,21 +18,21 @@ interface InventoryDetailViewProps {
 type WashStatus = 'clean' | 'needs_washing' | 'in_wash' | 'not_applicable';
 
 const WASH_STATUS_CONFIG: Record<WashStatus, { label: string; color: string; bg: string; border: string; dot: string; icon: string }> = {
-  clean:          { label: 'Clean & Ready',    color: 'text-emerald-700', bg: 'bg-emerald-50',  border: 'border-emerald-200', dot: 'bg-emerald-400', icon: '✓' },
-  needs_washing:  { label: 'Needs Washing',    color: 'text-rose-700',    bg: 'bg-rose-50',     border: 'border-rose-200',    dot: 'bg-rose-500',   icon: '⚠' },
-  in_wash:        { label: 'In Wash Cycle',    color: 'text-amber-700',   bg: 'bg-amber-50',    border: 'border-amber-200',   dot: 'bg-amber-400',  icon: '🔄' },
-  not_applicable: { label: 'Disposable / N/A', color: 'text-slate-600',   bg: 'bg-slate-50',    border: 'border-slate-200',   dot: 'bg-slate-300',  icon: '—' },
+  clean: { label: 'Clean & Ready', color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200', dot: 'bg-emerald-400', icon: '✓' },
+  needs_washing: { label: 'Needs Washing', color: 'text-rose-700', bg: 'bg-rose-50', border: 'border-rose-200', dot: 'bg-rose-500', icon: '⚠' },
+  in_wash: { label: 'In Wash Cycle', color: 'text-amber-700', bg: 'bg-amber-50', border: 'border-amber-200', dot: 'bg-amber-400', icon: '🔄' },
+  not_applicable: { label: 'Disposable / N/A', color: 'text-slate-600', bg: 'bg-slate-50', border: 'border-slate-200', dot: 'bg-slate-300', icon: '—' },
 };
 
 const WASH_METHODS: Record<string, string> = {
-  autoclave:      'Autoclave (121°C)',
-  manual_hot:     'Manual Hot Wash',
-  detergent_rinse:'Detergent + DI Rinse',
-  acid_wash:      'Acid Wash',
-  ethanol_wipe:   '70% EtOH Wipe',
-  uv_sterilize:   'UV Sterilization',
-  dishwasher:     'Lab Dishwasher',
-  disposable:     'Disposable (N/A)',
+  autoclave: 'Autoclave (121°C)',
+  manual_hot: 'Manual Hot Wash',
+  detergent_rinse: 'Detergent + DI Rinse',
+  acid_wash: 'Acid Wash',
+  ethanol_wipe: '70% EtOH Wipe',
+  uv_sterilize: 'UV Sterilization',
+  dishwasher: 'Lab Dishwasher',
+  disposable: 'Disposable (N/A)',
 };
 
 export const InventoryDetailView: React.FC<InventoryDetailViewProps> = ({
@@ -84,7 +84,7 @@ export const InventoryDetailView: React.FC<InventoryDetailViewProps> = ({
   // Nullish-coalesce every field that could be undefined or null.
   const itemAny = item as any;
   const transactions: any[] = Array.isArray(itemAny.transactions) ? itemAny.transactions : [];
-  const batches: any[]      = Array.isArray(itemAny.batches)      ? itemAny.batches      : [];
+  const batches: any[] = Array.isArray(itemAny.batches) ? itemAny.batches : [];
   const meta: Record<string, any> = (item.metadata_json && typeof item.metadata_json === 'object')
     ? item.metadata_json
     : {};
@@ -92,10 +92,10 @@ export const InventoryDetailView: React.FC<InventoryDetailViewProps> = ({
   // Wash status from metadata_json
   const washStatus: WashStatus = (meta.wash_status as WashStatus) || 'not_applicable';
   const wsCfg = WASH_STATUS_CONFIG[washStatus] || WASH_STATUS_CONFIG.not_applicable;
-  const isReusable: boolean  = Boolean(meta.is_reusable);
+  const isReusable: boolean = Boolean(meta.is_reusable);
   const lastWashedAt: string | null = meta.last_washed_at ?? null;
   const lastWashedBy: string | null = meta.last_washed_by ?? null;
-  const washMethod: string | null   = meta.wash_method    ?? null;
+  const washMethod: string | null = meta.wash_method ?? null;
 
   // Stock gauge calculation
   const current = Number(item.current_stock ?? 0);
@@ -110,7 +110,7 @@ export const InventoryDetailView: React.FC<InventoryDetailViewProps> = ({
     try {
       await receiveInv.mutateAsync({
         id: item.id,
-        data: { quantity: parseFloat(receiveQty), lot_number: receiveLot || undefined, notes: 'Received via detail view' }
+        data: { quantity: parseFloat(receiveQty), lot_number: receiveLot || undefined, remarks: 'Received via detail view' }
       });
       setReceiveQty(''); setReceiveLot(''); setActiveAction(null);
     } catch (err) { console.error(err); }
@@ -201,11 +201,10 @@ export const InventoryDetailView: React.FC<InventoryDetailViewProps> = ({
               {isReusable && (
                 <button
                   onClick={() => { setNewWashStatus(washStatus); setShowWashModal(true); }}
-                  className={`flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-xl border transition-all cursor-pointer ${
-                    washStatus === 'needs_washing'
+                  className={`flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-xl border transition-all cursor-pointer ${washStatus === 'needs_washing'
                       ? 'bg-rose-600 text-white border-rose-600 hover:bg-rose-700 shadow-sm'
                       : 'bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200'
-                  }`}
+                    }`}
                 >
                   <Droplets className="w-4 h-4" />
                   {washStatus === 'needs_washing' ? '⚠ Mark as Washed' : 'Update Wash Status'}
@@ -578,9 +577,8 @@ export const InventoryDetailView: React.FC<InventoryDetailViewProps> = ({
                     const cfg = WASH_STATUS_CONFIG[ws];
                     return (
                       <button key={ws} type="button" onClick={() => setNewWashStatus(ws)}
-                        className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-semibold border-2 transition-all cursor-pointer ${
-                          newWashStatus === ws ? `${cfg.bg} ${cfg.color} border-current shadow-sm` : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
-                        }`}>
+                        className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-semibold border-2 transition-all cursor-pointer ${newWashStatus === ws ? `${cfg.bg} ${cfg.color} border-current shadow-sm` : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
+                          }`}>
                         <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${cfg.dot}`} />
                         {cfg.label}
                       </button>

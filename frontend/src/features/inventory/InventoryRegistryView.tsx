@@ -41,10 +41,10 @@ const WASH_METHODS = [
 type WashStatus = 'clean' | 'needs_washing' | 'in_wash' | 'not_applicable';
 
 const WASH_STATUS_CONFIG: Record<WashStatus, { label: string; color: string; bg: string; border: string; dot: string }> = {
-  clean:          { label: 'Clean & Ready',    color: 'text-emerald-700', bg: 'bg-emerald-50',  border: 'border-emerald-200', dot: 'bg-emerald-400' },
-  needs_washing:  { label: 'Needs Washing',    color: 'text-rose-700',    bg: 'bg-rose-50',     border: 'border-rose-200',    dot: 'bg-rose-500' },
-  in_wash:        { label: 'In Wash Cycle',    color: 'text-amber-700',   bg: 'bg-amber-50',    border: 'border-amber-200',   dot: 'bg-amber-400' },
-  not_applicable: { label: 'Disposable / N/A', color: 'text-slate-600',   bg: 'bg-slate-50',    border: 'border-slate-200',   dot: 'bg-slate-300' },
+  clean: { label: 'Clean & Ready', color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200', dot: 'bg-emerald-400' },
+  needs_washing: { label: 'Needs Washing', color: 'text-rose-700', bg: 'bg-rose-50', border: 'border-rose-200', dot: 'bg-rose-500' },
+  in_wash: { label: 'In Wash Cycle', color: 'text-amber-700', bg: 'bg-amber-50', border: 'border-amber-200', dot: 'bg-amber-400' },
+  not_applicable: { label: 'Disposable / N/A', color: 'text-slate-600', bg: 'bg-slate-50', border: 'border-slate-200', dot: 'bg-slate-300' },
 };
 
 // Derive wash status from metadata (frontend-only feature layered over metadata_json)
@@ -130,7 +130,7 @@ export const InventoryRegistryView: React.FC<InventoryRegistryViewProps> = ({
     try {
       await receiveInventory.mutateAsync({
         id: receiveModal.id,
-        data: { quantity: parseFloat(receiveQty), lot_number: receiveLot, notes: receiveSupplier }
+        data: { quantity: parseFloat(receiveQty), lot_number: receiveLot, remarks: receiveSupplier }
       });
       setReceiveModal(null); setReceiveQty(''); setReceiveLot(''); setReceiveSupplier('');
     } catch (err) { console.error(err); }
@@ -240,9 +240,8 @@ export const InventoryRegistryView: React.FC<InventoryRegistryViewProps> = ({
           </div>
           <button
             onClick={() => setShowLowStockOnly(!showLowStockOnly)}
-            className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-all cursor-pointer ${
-              showLowStockOnly ? 'bg-rose-600 text-white border-rose-600' : 'bg-white text-rose-600 border-rose-300 hover:bg-rose-50'
-            }`}
+            className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-all cursor-pointer ${showLowStockOnly ? 'bg-rose-600 text-white border-rose-600' : 'bg-white text-rose-600 border-rose-300 hover:bg-rose-50'
+              }`}
           >
             {showLowStockOnly ? 'Show All' : 'Filter Low Stock'}
           </button>
@@ -265,9 +264,8 @@ export const InventoryRegistryView: React.FC<InventoryRegistryViewProps> = ({
           </div>
           <button
             onClick={() => setWashFilter(washFilter === 'needs_washing' ? '' : 'needs_washing')}
-            className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-all cursor-pointer ${
-              washFilter === 'needs_washing' ? 'bg-amber-600 text-white border-amber-600' : 'bg-white text-amber-600 border-amber-300 hover:bg-amber-50'
-            }`}
+            className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-all cursor-pointer ${washFilter === 'needs_washing' ? 'bg-amber-600 text-white border-amber-600' : 'bg-white text-amber-600 border-amber-300 hover:bg-amber-50'
+              }`}
           >
             {washFilter === 'needs_washing' ? 'Show All' : 'Show Dirty Items'}
           </button>
@@ -305,11 +303,10 @@ export const InventoryRegistryView: React.FC<InventoryRegistryViewProps> = ({
             <button
               key={c.code}
               onClick={() => setSelectedCategory(c.code)}
-              className={`flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
-                selectedCategory === c.code
+              className={`flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${selectedCategory === c.code
                   ? 'bg-rose-600 text-white border-rose-600 shadow-sm'
                   : 'bg-white text-slate-600 border-slate-200 hover:bg-rose-50 hover:border-rose-300'
-              }`}
+                }`}
             >
               <span>{c.icon}</span>
               {c.label}
@@ -322,9 +319,8 @@ export const InventoryRegistryView: React.FC<InventoryRegistryViewProps> = ({
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Wash Status</span>
           <button
             onClick={() => setWashFilter('')}
-            className={`text-xs font-semibold px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
-              washFilter === '' ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-            }`}
+            className={`text-xs font-semibold px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${washFilter === '' ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+              }`}
           >
             All
           </button>
@@ -334,11 +330,10 @@ export const InventoryRegistryView: React.FC<InventoryRegistryViewProps> = ({
               <button
                 key={ws}
                 onClick={() => setWashFilter(washFilter === ws ? '' : ws)}
-                className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
-                  washFilter === ws
+                className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${washFilter === ws
                     ? `${cfg.bg} ${cfg.color} ${cfg.border}`
                     : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                }`}
+                  }`}
               >
                 <span className={`w-2 h-2 rounded-full ${cfg.dot}`} />
                 {cfg.label}
@@ -463,11 +458,10 @@ export const InventoryRegistryView: React.FC<InventoryRegistryViewProps> = ({
                           )}
                         </td>
                         <td className="py-3.5 px-4">
-                          <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${
-                            inv.is_low_stock
+                          <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${inv.is_low_stock
                               ? 'bg-rose-50 text-rose-700 border-rose-200'
                               : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                          }`}>
+                            }`}>
                             {inv.is_low_stock ? '⚠ LOW STOCK' : '✓ AVAILABLE'}
                           </span>
                         </td>
@@ -619,9 +613,8 @@ export const InventoryRegistryView: React.FC<InventoryRegistryViewProps> = ({
                     <div className="grid grid-cols-3 gap-2">
                       {CATEGORIES.filter(c => c.code).map(c => (
                         <button key={c.code} type="button" onClick={() => setNewCategory(c.code)}
-                          className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-semibold border-2 transition-all cursor-pointer ${
-                            newCategory === c.code ? 'bg-rose-50 text-rose-700 border-rose-400' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
-                          }`}>
+                          className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-semibold border-2 transition-all cursor-pointer ${newCategory === c.code ? 'bg-rose-50 text-rose-700 border-rose-400' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
+                            }`}>
                           <span>{c.icon}</span>{c.label}
                         </button>
                       ))}
@@ -714,9 +707,8 @@ export const InventoryRegistryView: React.FC<InventoryRegistryViewProps> = ({
                           const cfg = WASH_STATUS_CONFIG[ws];
                           return (
                             <button key={ws} type="button" onClick={() => setNewWashStatus(ws)}
-                              className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-semibold border-2 transition-all cursor-pointer ${
-                                newWashStatus === ws ? `${cfg.bg} ${cfg.color} border-current` : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
-                              }`}>
+                              className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-semibold border-2 transition-all cursor-pointer ${newWashStatus === ws ? `${cfg.bg} ${cfg.color} border-current` : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
+                                }`}>
                               <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${cfg.dot}`} />
                               {cfg.label}
                             </button>
@@ -731,9 +723,8 @@ export const InventoryRegistryView: React.FC<InventoryRegistryViewProps> = ({
                         <div className="grid grid-cols-2 gap-2">
                           {WASH_METHODS.filter(m => m.code !== 'disposable').map(m => (
                             <button key={m.code} type="button" onClick={() => setNewWashMethod(m.code)}
-                              className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold border-2 transition-all cursor-pointer text-left ${
-                                newWashMethod === m.code ? 'bg-blue-50 text-blue-700 border-blue-400' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
-                              }`}>
+                              className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold border-2 transition-all cursor-pointer text-left ${newWashMethod === m.code ? 'bg-blue-50 text-blue-700 border-blue-400' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
+                                }`}>
                               <span className="text-base">{m.icon}</span>
                               {m.label}
                             </button>
