@@ -9,7 +9,7 @@ The purpose of this project is to eliminate fragmented paper trails and siloed d
 **Target Users:**
 - **Bench Scientists & Researchers:** For planning experiments, documenting observations, and tracking samples.
 - **Lab Managers:** For monitoring inventory, overseeing instrument maintenance, and approving protocols.
-- **Quality Assurance (QA):** For ensuring data integrity, compliance tracking, and audit trails.
+- **Quality Assurance (QA):** For ensuring data integrity, compliance tracking, and audit trails.........
 - **System Administrators:** For managing organizational hierarchy and Role-Based Access Control (RBAC).
 
 ---
