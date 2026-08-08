@@ -4,7 +4,13 @@ import {
 } from 'recharts';
 import { Download } from 'lucide-react';
 
+import { useAuth } from '../../providers/AuthProvider';
+import { canExportExperiment } from '../../utils/permissions';
+
 export const ReportsAnalyticsView: React.FC = () => {
+  const { user } = useAuth();
+  const allowExport = canExportExperiment(user);
+
   const lineData = [
     { month: 'Jan', experiments: 8, completed: 6 },
     { month: 'Feb', experiments: 12, completed: 9 },
@@ -37,10 +43,15 @@ export const ReportsAnalyticsView: React.FC = () => {
           <p className="text-xs text-slate-500">Real-time telemetry on research throughput, protocol success rates, and sample usage</p>
         </div>
 
-        <button className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-sm transition-colors self-start sm:self-auto cursor-pointer">
-          <Download className="w-4 h-4" />
-          <span>Export PDF Report</span>
-        </button>
+        {allowExport && (
+          <button 
+            onClick={() => window.print()}
+            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-sm transition-colors self-start sm:self-auto cursor-pointer"
+          >
+            <Download className="w-4 h-4" />
+            <span>Export PDF Report</span>
+          </button>
+        )}
       </div>
 
       {/* Metric Cards Grid */}

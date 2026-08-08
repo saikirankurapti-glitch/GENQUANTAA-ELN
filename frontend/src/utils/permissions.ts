@@ -33,60 +33,8 @@ export const canViewViewMode = (user: User | null, view: ViewMode): boolean => {
     return isUserAdmin(user);
   }
 
-  // Public / Shared views accessible to all logged-in users
-  if (['dashboard', 'settings', 'notifications', 'login', 'landing'].includes(view)) {
-    return true;
-  }
-
-  // Admin access: full access to all views
-  if (isUserAdmin(user)) {
-    return true;
-  }
-
-  const role = normalizeRole(user);
-
-  // Viewer: Read-only access to View Dashboard, View Projects, View Experiments
-  if (role === 'Viewer') {
-    return ['dashboard', 'projects', 'project_detail', 'experiments', 'eln'].includes(view);
-  }
-
-  // QA: Read-only access to Dashboard, Projects, Experiments, Notebook, Samples, Audit Logs, Reports
-  if (role === 'QA') {
-    return ['dashboard', 'projects', 'project_detail', 'experiments', 'eln', 'samples', 'sample-detail', 'audit', 'reports'].includes(view);
-  }
-
-  // Bioinformatician: Dashboard, Projects, Sequence Management, Sample Registry, View Experiments
-  if (role === 'Bioinformatician') {
-    return [
-      'dashboard', 'projects', 'project_detail', 'experiments', 'sequences', 'sequence-registry', 'sequence-detail',
-      'samples', 'sample-detail', 'eln', 'ai-copilot', 'search', 'reports', 'settings'
-    ].includes(view);
-  }
-
-  // Lab Technician: Dashboard, Experiments (eln), Samples, Inventory, Settings
-  if (role === 'Lab Technician') {
-    return ['dashboard', 'experiments', 'eln', 'samples', 'sample-detail', 'inventory', 'settings'].includes(view);
-  }
-
-  // Researcher: Dashboard, Assigned Projects, Experiments, Notebook, Samples, Protocols
-  if (role === 'Researcher') {
-    return [
-      'dashboard', 'projects', 'project_detail', 'experiments', 'eln', 'samples', 'sample-detail',
-      'inventory', 'protocols', 'protocol-detail', 'instruments', 'instrument-detail',
-      'sequences', 'sequence-registry', 'sequence-detail', 'ai-copilot', 'search', 'settings'
-    ].includes(view);
-  }
-
-  // PI (Project Owner): Dashboard, Projects, Experiments, Notebook, Samples, Protocols, Reports
-  if (role === 'PI') {
-    return [
-      'dashboard', 'projects', 'project_detail', 'experiments', 'eln', 'samples', 'sample-detail',
-      'protocols', 'protocol-detail', 'reports', 'ai-copilot', 'search', 'settings'
-    ].includes(view);
-  }
-
-  // Default fallback for research users
-  return !['admin', 'audit'].includes(view);
+  // All logged-in users have read access to standard ELN research modules
+  return true;
 };
 
 // CRUD Capability Checkers (Read-only enforcement for QA and Viewer)
@@ -120,13 +68,17 @@ export const canAccessAdminPanel = (user?: User | null): boolean => isUserAdmin(
 export const canCreateProjects = (user?: User | null): boolean => {
   if (!user || !canCreate(user)) return false;
   const role = normalizeRole(user);
-  return isUserAdmin(user) || role === 'PI' || role === 'Researcher' || role === 'Bioinformatician';
+  // Only Admin and PI can create projects.
+  // Researchers / Bioinformaticians are assigned to projects by a PI or Admin.
+  return isUserAdmin(user) || role === 'PI';
 };
 
 export const canEditProjects = (user?: User | null): boolean => {
   if (!user || !canEdit(user)) return false;
   const role = normalizeRole(user);
-  return isUserAdmin(user) || role === 'PI' || role === 'Researcher' || role === 'Bioinformatician';
+  // Researchers / Bioinformaticians can edit experiments within a project they are assigned to,
+  // but cannot rename or modify the project itself.
+  return isUserAdmin(user) || role === 'PI';
 };
 
 export const canDeleteProjects = (user?: User | null): boolean => {
@@ -138,13 +90,23 @@ export const canDeleteProjects = (user?: User | null): boolean => {
 export const canCreateExperiment = (user?: User | null): boolean => {
   if (!user || !canCreate(user)) return false;
   const role = normalizeRole(user);
-  return isUserAdmin(user) || role === 'PI' || role === 'Researcher' || role === 'Lab Technician';
+  // Only Admin and PI can create / initiate new experiments
+  // Researchers and Scientists work within assigned experiments to document results
+  return isUserAdmin(user) || role === 'PI';
 };
 
 export const canEditExperiment = (user?: User | null): boolean => {
   if (!user || !canEdit(user)) return false;
   const role = normalizeRole(user);
-  return isUserAdmin(user) || role === 'PI' || role === 'Researcher' || role === 'Lab Technician';
+  // Admin, PI, Researcher, Scientist, and Bioinformatician can edit/document notebook entries
+  return isUserAdmin(user) || ['PI', 'Researcher', 'Scientist', 'Bioinformatician'].includes(role);
+};
+
+// Team / collaborator management: only Admin and PI can add/remove members
+export const canManageTeam = (user?: User | null): boolean => {
+  if (!user) return false;
+  const role = normalizeRole(user);
+  return isUserAdmin(user) || role === 'PI';
 };
 
 export const canManageInventory = (user?: User | null): boolean => {
@@ -164,3 +126,67 @@ export const canManageSequences = (user?: User | null): boolean => {
   const role = normalizeRole(user);
   return isUserAdmin(user) || role === 'Bioinformatician' || role === 'Researcher';
 };
+
+// QA Role Comment Visibility and Annotation Permissions
+export const isUserQA = (user?: User | null): boolean => {
+  if (!user) return false;
+  const role = normalizeRole(user);
+  return role === 'QA' || isUserAdmin(user);
+};
+
+export const isStrictlyQA = (user?: User | null): boolean => {
+  if (!user) return false;
+  const role = normalizeRole(user);
+  return role === 'QA';
+};
+
+export const isStrictlyViewer = (user?: User | null): boolean => {
+  if (!user) return false;
+  const role = normalizeRole(user);
+  return role === 'Viewer';
+};
+
+export const canUseAICopilot = (user?: User | null): boolean => {
+  if (!user) return false;
+  const role = normalizeRole(user);
+  if (role === 'QA' || role === 'Viewer') return false;
+  return true;
+};
+
+// Researchers & Authors MUST be able to view QA comments to resolve them!
+export const canViewQAComments = (user?: User | null): boolean => {
+  if (!user) return false;
+  return true;
+};
+
+// Only QA and Admin can initiate new QA audit review threads
+export const canAddQAComments = (user?: User | null): boolean => {
+  if (!user) return false;
+  const role = normalizeRole(user);
+  return role === 'QA' || isUserAdmin(user);
+};
+
+// Researchers, PIs, Scientists, QA, and Admins can reply to comment threads and mark them resolved
+export const canReplyQAComments = (user?: User | null): boolean => {
+  if (!user) return false;
+  const role = normalizeRole(user);
+  return role !== 'Viewer';
+};
+
+export const canResolveQAComments = (user?: User | null): boolean => {
+  if (!user) return false;
+  const role = normalizeRole(user);
+  return role !== 'Viewer';
+};
+
+// Document Download & Export Permissions:
+// STRICT: Only Admin and PI (Principal Investigator) have permission to download/export documents.
+export const canExportExperiment = (user?: User | null): boolean => {
+  if (!user) return false;
+  const role = normalizeRole(user);
+  return role === 'PI' || isUserAdmin(user);
+};
+
+export const canDownloadDocument = (user?: User | null): boolean => canExportExperiment(user);
+
+

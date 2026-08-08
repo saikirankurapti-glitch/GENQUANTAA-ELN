@@ -55,6 +55,21 @@ class ExperimentBase(BaseModel):
             raise ValueError("Experiment code cannot be blank.")
         return v
 
+    @field_validator("start_date", "planned_end_date", mode="before")
+    @classmethod
+    def coerce_datetime_to_date(cls, v: Any) -> Any:
+        """Strip time component from datetime values stored as date fields.
+
+        PostgreSQL timestamps returned as datetime objects fail Pydantic v2's
+        strict date validation. Extracting .date() makes validation succeed.
+        """
+        if v is None:
+            return None
+        if hasattr(v, "date"):
+            return v.date()
+        return v
+
+
 
 class ExperimentCreate(ExperimentBase):
     project_id: Optional[UUID] = Field(None, description="Parent Project identifier (optional - defaults to tenant workspace)")
@@ -87,15 +102,15 @@ class ExperimentRead(ExperimentBase):
     id: UUID = Field(..., description="Experiment unique identifier")
     tenant_id: UUID = Field(..., description="Tenant workspace identifier")
     organization_id: Optional[UUID] = Field(None, description="Organization identifier")
-    project_id: UUID = Field(..., description="Parent project identifier")
+    project_id: Optional[UUID] = Field(None, description="Parent project identifier")
     owner_id: Optional[UUID] = Field(None, description="Owner user identifier")
     reviewer_id: Optional[UUID] = Field(None, description="Reviewer user identifier")
     completed_date: Optional[date] = Field(None, description="Completion date")
     reviewed_date: Optional[date] = Field(None, description="Review sign-off date")
     is_archived: bool = Field(False, description="Archive state flag")
     archived_at: Optional[datetime] = Field(None, description="Timestamp when archived")
-    created_at: datetime = Field(..., description="Creation timestamp")
-    updated_at: datetime = Field(..., description="Last update timestamp")
+    created_at: Optional[datetime] = Field(default_factory=lambda: datetime.now(timezone.utc), description="Creation timestamp")
+    updated_at: Optional[datetime] = Field(default_factory=lambda: datetime.now(timezone.utc), description="Last update timestamp")
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -139,3 +154,52 @@ class ExperimentListResponse(BaseModel):
     page: int = Field(1, description="Current page")
     page_size: int = Field(20, description="Page size")
     total_pages: int = Field(1, description="Total pages count")
+
+
+class CommentReplyRead(BaseModel):
+    id: UUID
+    author_id: UUID
+    author_name: str
+    author_role: str = "Researcher"
+    comment: str
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ExperimentCommentCreate(BaseModel):
+    section_id: str = Field(..., description="Referenced section or step ID (e.g. 'step_2', 'objective', 'results')")
+    section_title: Optional[str] = Field(None, description="Human readable section label (e.g. 'Protocol Step 2')")
+    target_text: Optional[str] = Field(None, description="Exact highlighted or referenced quote/line")
+    comment: str = Field(..., min_length=1, description="Review feedback or question text")
+    category: str = Field("QA_REVIEW", description="Category: QA_REVIEW, COMPLIANCE_CHECK, SCIENTIFIC_QUESTION, SUGGESTION")
+
+
+class ExperimentCommentReplyCreate(BaseModel):
+    comment: str = Field(..., min_length=1, description="Reply text")
+
+
+class ExperimentCommentResolve(BaseModel):
+    status: str = Field("resolved", description="Status: 'resolved' or 'open'")
+    resolution_note: Optional[str] = Field(None, description="Optional note explaining resolution")
+
+
+class ExperimentCommentRead(BaseModel):
+    id: UUID
+    experiment_id: UUID
+    author_id: UUID
+    author_name: str
+    author_role: str
+    section_id: str
+    section_title: Optional[str] = None
+    target_text: Optional[str] = None
+    comment: str
+    category: str = "QA_REVIEW"
+    status: str = "open"  # 'open' | 'resolved'
+    resolved_by: Optional[str] = None
+    resolved_at: Optional[datetime] = None
+    resolution_note: Optional[str] = None
+    created_at: datetime
+    replies: List[CommentReplyRead] = Field(default_factory=list)
+
+    model_config = ConfigDict(from_attributes=True)

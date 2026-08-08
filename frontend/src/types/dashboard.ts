@@ -44,6 +44,8 @@ export interface DashboardResponse {
   project_count: number;
   active_experiment_count: number;
   completed_experiment_count: number;
+  review_required_count: number;
+  total_samples_count: number;
   recent_experiments: ExperimentSummary[];
   pending_notifications: NotificationSummary[];
   quick_actions: QuickAction[];

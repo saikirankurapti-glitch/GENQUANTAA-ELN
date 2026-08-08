@@ -57,3 +57,14 @@ export const useDeleteProject = () => {
     },
   });
 };
+
+export const useAddCollaborator = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ projectId, userId, role }: { projectId: string, userId: string, role: string }) => 
+      projectService.addCollaborator(projectId, userId, role),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['project', variables.projectId] });
+    },
+  });
+};

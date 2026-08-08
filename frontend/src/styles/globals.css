@@ -53,3 +53,88 @@ input:-webkit-autofill:active {
   -webkit-box-shadow: 0 0 0px 1000px #020617 inset !important;
   transition: background-color 5000s ease-in-out 0s !important;
 }
+
+/* ==========================================================================
+   21 CFR Part 11 & Scientific Document Print Stylesheet
+   ========================================================================== */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm 12mm 15mm 12mm;
+  }
+
+  html, body {
+    height: auto !important;
+    min-height: 100% !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    font-size: 10.5pt !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Completely hide all UI Chrome: Sidebars, Top Headers, Dialogs, Modals, Action Buttons */
+  header,
+  aside,
+  nav,
+  .no-print,
+  .print-hidden,
+  [data-no-print] {
+    display: none !important;
+  }
+
+  /* Reset layout wrappers to allow standard multi-page flow without clipping */
+  #root,
+  .flex,
+  .h-screen,
+  .overflow-hidden,
+  .overflow-y-auto,
+  main {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    display: block !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+  }
+
+  /* Clean scientific document canvas */
+  .eln-document-canvas {
+    max-width: 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  /* Avoid page breaks inside sections and tables */
+  .print-avoid-break {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* Ensure textareas/inputs render cleanly without scrollbars or cutoffs */
+  textarea, input {
+    border: 1px solid #cbd5e1 !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    resize: none !important;
+    box-shadow: none !important;
+  }
+
+  /* Show full text content in print */
+  .print-expand {
+    display: block !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    white-space: pre-wrap !important;
+  }
+}
+

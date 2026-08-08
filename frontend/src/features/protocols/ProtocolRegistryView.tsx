@@ -3,6 +3,7 @@ import type { ViewMode } from '../../types';
 import { Search, Plus, ArrowUpRight, Loader2, AlertCircle, ShieldCheck } from 'lucide-react';
 import { useProtocols, useCreateProtocol } from '../../hooks/useProtocols';
 import { useAuth } from '../../providers/AuthProvider';
+import { isStrictlyViewer } from '../../utils/permissions';
 
 interface ProtocolRegistryViewProps {
   onSelectProtocol: (id: string) => void;
@@ -14,6 +15,7 @@ export const ProtocolRegistryView: React.FC<ProtocolRegistryViewProps> = ({
   onSelectView
 }) => {
   const { user } = useAuth();
+  const isViewer = isStrictlyViewer(user);
   const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(1);
   const pageSize = 20;
@@ -65,13 +67,15 @@ export const ProtocolRegistryView: React.FC<ProtocolRegistryViewProps> = ({
           </div>
         </div>
 
-        <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-3.5 py-1.5 rounded-lg shadow-sm transition-colors cursor-pointer"
-        >
-          <Plus className="w-4 h-4" />
-          <span>New Protocol</span>
-        </button>
+        {!isViewer && (
+          <button
+            onClick={() => setShowModal(true)}
+            className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-3.5 py-1.5 rounded-lg shadow-sm transition-colors cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>New Protocol</span>
+          </button>
+        )}
       </div>
 
       {isLoading ? (

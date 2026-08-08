@@ -61,6 +61,7 @@ export interface ExperimentCreate {
   metadata_json?: Record<string, any>;
   project_id?: string | null;
   organization_id?: string | null;
+  tenant_id?: string | null;
   owner_id?: string | null;
   reviewer_id?: string | null;
 }

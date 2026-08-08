@@ -129,10 +129,47 @@ class MockAIProvider(AIProviderBase):
         last_user = next(
             (m["content"] for m in reversed(messages) if m["role"] == "user"), ""
         )
-        content = (
-            f"[Mock AI Response] I received your message: '{last_user[:80]}'. "
-            "In production this will be answered by the configured LLM provider."
-        )
+        prompt_lower = last_user.lower()
+        
+        # High-quality demo responses based on context
+        if "objective & hypothesis" in prompt_lower or "fill_objective" in kwargs.get("feature", ""):
+            content = (
+                "Objective: To evaluate the editing efficiency of the designed CRISPR/Cas9 guide RNAs targeting the human EGFR locus in HEK293T cells.\n\n"
+                "Hypothesis: We hypothesize that sgRNA-3 will demonstrate the highest indel frequency (>60%) due to its proximity to the protospacer adjacent motif (PAM) and minimal predicted off-target binding, leading to effective functional knockout of the EGFR receptor."
+            )
+        elif "step-by-step lab protocol" in prompt_lower:
+            content = (
+                "1. Thaw HEK293T cells and culture in DMEM supplemented with 10% FBS at 37°C, 5% CO2.\n"
+                "2. Seed cells at 2x10^5 cells/well in a 6-well plate 24 hours prior to transfection.\n"
+                "3. Prepare transfection mix: 2.5 µg of Cas9 plasmid, 2.5 µg of sgRNA plasmid, and 10 µL of Lipofectamine 3000 in Opti-MEM.\n"
+                "4. Incubate transfection mix for 15 minutes at room temperature, then add dropwise to cells.\n"
+                "5. After 48 hours, extract genomic DNA using the Quick-DNA Miniprep kit.\n"
+                "6. Perform PCR amplification of the target EGFR region.\n"
+                "7. Purify PCR products and proceed with Sanger sequencing or T7E1 mismatch cleavage assay to quantify indel formation."
+            )
+        elif "materials & reagents" in prompt_lower:
+            content = (
+                '- "HEK293T Cell Line" | Quantity: 1 vial | Source: ATCC\n'
+                '- "Lipofectamine 3000 Transfection Reagent" | Quantity: 50 µL | Source: Thermo Fisher\n'
+                '- "Cas9 Expression Plasmid (pSpCas9(BB)-2A-Puro)" | Quantity: 10 µg | Source: Addgene\n'
+                '- "Quick-DNA Miniprep Kit" | Quantity: 1 kit | Source: Zymo Research\n'
+                '- "Opti-MEM Reduced Serum Medium" | Quantity: 50 mL | Source: Gibco'
+            )
+        elif "realistic, highly professional experimental results" in prompt_lower:
+            content = (
+                "Cells were successfully transfected with >80% efficiency as observed by GFP co-expression controls. "
+                "Genomic DNA was extracted 48h post-transfection with a yield of ~150 ng/µL (A260/280 = 1.88). "
+                "The T7E1 mismatch cleavage assay revealed significant editing at the target locus. "
+                "Quantification of the cleavage bands via densitometry indicated an indel frequency of 64% for sgRNA-3, 42% for sgRNA-1, and 18% for sgRNA-2. "
+                "Sanger sequencing followed by TIDE analysis confirmed the 64% editing efficiency for sgRNA-3, predominantly consisting of a 1-bp insertion. "
+                "These results strongly support the hypothesis and identify sgRNA-3 as the optimal candidate for downstream knockout studies."
+            )
+        else:
+            content = (
+                "Based on the available protocol literature and sequence data, the CRISPR design looks highly specific. "
+                "The predicted off-target score is minimal. Ensure you run a gradient PCR to optimize the annealing temperature for the T7E1 assay primers."
+            )
+            
         return {
             "content": content,
             "prompt_tokens": len(last_user.split()),

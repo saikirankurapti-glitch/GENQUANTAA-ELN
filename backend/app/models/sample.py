@@ -28,6 +28,7 @@ class SampleStorageLocation(Document):
 class Sample(Document):
     id: UUID = Field(default_factory=uuid4)
     tenant_id: UUID
+    organization_id: Optional[UUID] = None
     experiment_id: Optional[UUID] = None
     sample_type_id: Optional[UUID] = None
     location_id: Optional[UUID] = None
@@ -45,6 +46,14 @@ class Sample(Document):
 
     class Settings:
         name = "samples"
+
+    @property
+    def sample_name(self) -> str:
+        return self.name
+
+    @property
+    def storage_location_id(self) -> Optional[UUID]:
+        return self.location_id
 
 class SampleChainOfCustody(Document):
     id: UUID = Field(default_factory=uuid4)

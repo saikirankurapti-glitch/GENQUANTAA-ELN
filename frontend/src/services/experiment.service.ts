@@ -53,5 +53,28 @@ export const experimentService = {
   unarchiveExperiment: async (id: string): Promise<Experiment> => {
     const response = await apiClient.post<Experiment>(`/experiments/${id}/restore`);
     return response.data;
+  },
+
+  getQAComments: async (experimentId: string) => {
+    const response = await apiClient.get<any[]>(`/experiments/${experimentId}/comments`);
+    return response.data;
+  },
+
+  addQAComment: async (experimentId: string, data: { section_id: string; section_title?: string; target_text?: string; comment: string; category?: string }) => {
+    const response = await apiClient.post<any>(`/experiments/${experimentId}/comments`, data);
+    return response.data;
+  },
+
+  replyQAComment: async (experimentId: string, commentId: string, comment: string) => {
+    const response = await apiClient.post<any>(`/experiments/${experimentId}/comments/${commentId}/reply`, { comment });
+    return response.data;
+  },
+
+  resolveQAComment: async (experimentId: string, commentId: string, status: 'resolved' | 'open', resolutionNote?: string) => {
+    const response = await apiClient.patch<any>(`/experiments/${experimentId}/comments/${commentId}/resolve`, {
+      status,
+      resolution_note: resolutionNote
+    });
+    return response.data;
   }
 };

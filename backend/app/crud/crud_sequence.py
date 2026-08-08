@@ -3,10 +3,6 @@ from datetime import datetime, timezone
 from typing import List, Optional, Tuple
 from uuid import UUID
 
-from sqlalchemy import func, or_, select
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
-
 from app.models.sequence import (
     Sequence,
     SequenceAnalysisResult,
@@ -27,11 +23,10 @@ logger = logging.getLogger(__name__)
 
 
 class SequenceRepository:
-    """Async Repository for Sequence entities with strict tenant isolation."""
+    """Async Repository for Sequence entities with strict tenant isolation (Beanie version)."""
 
     async def create(
         self,
-        db: AsyncSession,
         *,
         obj_in: SequenceCreate,
         tenant_id: UUID,
@@ -39,289 +34,162 @@ class SequenceRepository:
     ) -> Sequence:
         """Create a new Sequence record and snapshot the first version."""
         seq_data = obj_in.sequence_data.upper()
-        length = len(seq_data)
-        gc = _compute_gc_content(obj_in.sequence_type, seq_data)
+        # Clean sequence for pitch demo to prevent crashes
+        from app.utils.bioinformatics import clean_sequence, calculate_gc_content, calculate_molecular_weight
+        clean_seq = clean_sequence(seq_data)
+        
+        length = len(clean_seq)
+        gc = calculate_gc_content(clean_seq)
+        mw = calculate_molecular_weight(clean_seq, obj_in.sequence_type)
 
         seq = Sequence(
             tenant_id=tenant_id,
-            organization_id=obj_in.organization_id,
             experiment_id=obj_in.experiment_id,
             sample_id=obj_in.sample_id,
-            sequence_code=obj_in.sequence_code,
-            sequence_name=obj_in.sequence_name,
+            name=obj_in.sequence_name,
             sequence_type=obj_in.sequence_type,
-            sequence_data=seq_data,
+            sequence_data=clean_seq,  # save cleaned data
             length=length,
-            gc_content=gc,
-            molecular_weight=obj_in.molecular_weight,
-            source=obj_in.source,
             status="active",
-            version=1,
-            metadata_json=obj_in.metadata_json,
-            created_by=current_user_id,
-            updated_by=current_user_id,
+            gc_content=gc,
+            molecular_weight=mw,
+            is_deleted=False,
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
         )
-        db.add(seq)
-        await db.flush()
+        await seq.insert()
 
         # Snapshot version 1
-        ver = SequenceVersion(
+        sv = SequenceVersion(
             sequence_id=seq.id,
-            version_number=1,
+            version=1,
             sequence_data=seq_data,
-            length=length,
-            gc_content=gc,
-            change_summary="Initial version.",
-            created_by=current_user_id,
+            created_at=datetime.now(timezone.utc)
         )
-        db.add(ver)
-        await db.commit()
-        await db.refresh(seq)
+        await sv.insert()
+
         return seq
 
     async def get_by_id(
-        self,
-        db: AsyncSession,
-        *,
-        id: UUID,
-        tenant_id: UUID,
-        include_details: bool = False,
+        self, *, id: UUID, tenant_id: UUID, include_details: bool = False
     ) -> Optional[Sequence]:
-        """Fetch Sequence by ID within tenant scope."""
-        stmt = select(Sequence).where(
+        """Fetch Sequence by ID."""
+        return await Sequence.find_one(
             Sequence.id == id,
             Sequence.tenant_id == tenant_id,
-            Sequence.is_deleted == False,
+            Sequence.is_deleted == False
         )
-        if include_details:
-            stmt = stmt.options(
-                selectinload(Sequence.seq_versions),
-                selectinload(Sequence.annotations),
-                selectinload(Sequence.attachments),
-                selectinload(Sequence.analysis_results),
-            )
-        res = await db.execute(stmt)
-        return res.scalar_one_or_none()
-
-    async def get_by_code(
-        self, db: AsyncSession, *, sequence_code: str, tenant_id: UUID
-    ) -> Optional[Sequence]:
-        """Fetch Sequence by code within tenant scope."""
-        stmt = select(Sequence).where(
-            Sequence.sequence_code == sequence_code.upper(),
-            Sequence.tenant_id == tenant_id,
-            Sequence.is_deleted == False,
-        )
-        res = await db.execute(stmt)
-        return res.scalar_one_or_none()
 
     async def update(
         self,
-        db: AsyncSession,
         *,
         db_obj: Sequence,
         obj_in: SequenceUpdate,
-        current_user_id: Optional[UUID] = None,
+        current_user_id: Optional[UUID] = None
     ) -> Sequence:
-        """Update Sequence. If sequence_data changes, archive a new version."""
-        update_data = obj_in.model_dump(exclude_unset=True, exclude={"change_summary"})
+        """Update existing Sequence attributes. Records new version if sequence_data changes."""
+        update_data = obj_in.model_dump(exclude_unset=True)
+        new_version_needed = False
 
-        # If sequence_data is changing, validate and recompute metrics
-        if "sequence_data" in update_data:
-            raw = update_data["sequence_data"].upper()
+        if "sequence_data" in update_data and update_data["sequence_data"]:
+            from app.utils.bioinformatics import clean_sequence, calculate_gc_content, calculate_molecular_weight
+            new_data = clean_sequence(update_data["sequence_data"])
             seq_type = update_data.get("sequence_type", db_obj.sequence_type)
-            update_data["sequence_data"] = raw
-            update_data["length"] = len(raw)
-            update_data["gc_content"] = _compute_gc_content(seq_type, raw)
+            
+            if new_data != db_obj.sequence_data:
+                db_obj.sequence_data = new_data
+                db_obj.length = len(new_data)
+                db_obj.gc_content = calculate_gc_content(new_data)
+                db_obj.molecular_weight = calculate_molecular_weight(new_data, seq_type)
+                new_version_needed = True
 
-            # Increment version and snapshot
-            new_version = db_obj.version + 1
-            update_data["version"] = new_version
-            ver = SequenceVersion(
-                sequence_id=db_obj.id,
-                version_number=new_version,
-                sequence_data=raw,
-                length=len(raw),
-                gc_content=_compute_gc_content(seq_type, raw),
-                change_summary=obj_in.change_summary or f"Updated to version {new_version}.",
-                created_by=current_user_id,
-            )
-            db.add(ver)
+        if "sequence_name" in update_data:
+            db_obj.name = update_data["sequence_name"]
+            
+        if "sequence_type" in update_data:
+            db_obj.sequence_type = update_data["sequence_type"]
 
-        for field, value in update_data.items():
-            setattr(db_obj, field, value)
-
-        db_obj.updated_by = current_user_id
         db_obj.updated_at = datetime.now(timezone.utc)
-        db.add(db_obj)
-        await db.commit()
-        await db.refresh(db_obj)
+        await db_obj.save()
+
+        if new_version_needed:
+            # We don't track the exact integer version on the Sequence model in Beanie right now, so we just count existing versions
+            count = await SequenceVersion.find({"sequence_id": db_obj.id}).count()
+            sv = SequenceVersion(
+                sequence_id=db_obj.id,
+                version=count + 1,
+                sequence_data=db_obj.sequence_data,
+                created_at=datetime.now(timezone.utc)
+            )
+            await sv.insert()
+
         return db_obj
 
     async def soft_delete(
-        self,
-        db: AsyncSession,
-        *,
-        id: UUID,
-        tenant_id: UUID,
-        current_user_id: Optional[UUID] = None,
+        self, *, id: UUID, tenant_id: UUID, current_user_id: Optional[UUID] = None
     ) -> bool:
-        """Soft-delete a Sequence record."""
-        seq = await self.get_by_id(db, id=id, tenant_id=tenant_id)
+        seq = await self.get_by_id(id=id, tenant_id=tenant_id)
         if not seq:
             return False
         seq.is_deleted = True
-        seq.deleted_at = datetime.now(timezone.utc)
-        seq.deleted_by = current_user_id
-        db.add(seq)
-        await db.commit()
+        seq.updated_at = datetime.now(timezone.utc)
+        await seq.save()
         return True
 
-    async def archive(
+    async def get_multi(
         self,
-        db: AsyncSession,
-        *,
-        id: UUID,
-        tenant_id: UUID,
-        current_user_id: Optional[UUID] = None,
-    ) -> Optional[Sequence]:
-        """Archive a Sequence."""
-        seq = await self.get_by_id(db, id=id, tenant_id=tenant_id)
-        if not seq:
-            return None
-        seq.status = "archived"
-        seq.archived_at = datetime.now(timezone.utc)
-        seq.updated_by = current_user_id
-        db.add(seq)
-        await db.commit()
-        await db.refresh(seq)
-        return seq
-
-    async def restore(
-        self,
-        db: AsyncSession,
-        *,
-        id: UUID,
-        tenant_id: UUID,
-        current_user_id: Optional[UUID] = None,
-    ) -> Optional[Sequence]:
-        """Restore an archived Sequence."""
-        seq = await self.get_by_id(db, id=id, tenant_id=tenant_id)
-        if not seq:
-            return None
-        seq.status = "active"
-        seq.archived_at = None
-        seq.updated_by = current_user_id
-        db.add(seq)
-        await db.commit()
-        await db.refresh(seq)
-        return seq
-
-    async def list_sequences(
-        self,
-        db: AsyncSession,
         *,
         tenant_id: UUID,
-        filter_params: SequenceFilter,
-        pagination: SequencePagination,
-    ) -> Tuple[List[Sequence], int]:
-        """List and search Sequences with filtering and pagination."""
-        query = select(Sequence).where(
+        sequence_type: Optional[str] = None,
+        status: Optional[str] = None,
+        experiment_id: Optional[UUID] = None,
+        search: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 20,
+    ) -> Tuple[List[dict], int]:
+        query = Sequence.find(
             Sequence.tenant_id == tenant_id,
-            Sequence.is_deleted == False,
+            Sequence.is_deleted == False
         )
-        if filter_params.sequence_type:
-            query = query.where(Sequence.sequence_type == filter_params.sequence_type.upper())
-        if filter_params.status:
-            query = query.where(Sequence.status == filter_params.status)
-        if filter_params.experiment_id:
-            query = query.where(Sequence.experiment_id == filter_params.experiment_id)
-        if filter_params.sample_id:
-            query = query.where(Sequence.sample_id == filter_params.sample_id)
-        if filter_params.search:
-            pattern = f"%{filter_params.search}%"
-            query = query.where(
-                or_(
-                    Sequence.sequence_code.ilike(pattern),
-                    Sequence.sequence_name.ilike(pattern),
-                )
-            )
 
-        count_stmt = select(func.count()).select_from(query.subquery())
-        total = (await db.execute(count_stmt)).scalar_one() or 0
+        if sequence_type:
+            query = query.find(Sequence.sequence_type == sequence_type)
+        if status:
+            query = query.find(Sequence.status == status)
+        if experiment_id:
+            query = query.find(Sequence.experiment_id == experiment_id)
 
-        sort_col = getattr(Sequence, pagination.sort_by, Sequence.created_at)
-        if pagination.sort_order.lower() == "desc":
-            query = query.order_by(sort_col.desc())
-        else:
-            query = query.order_by(sort_col.asc())
+        if search:
+            query = query.find({"$or": [
+                {"name": {"$regex": search, "$options": "i"}},
+            ]})
 
-        offset = (pagination.page - 1) * pagination.page_size
-        query = query.offset(offset).limit(pagination.page_size)
-        items = list((await db.execute(query)).scalars().all())
-        return items, total
+        total = await query.count()
+        items = await query.sort(-Sequence.created_at).skip(skip).limit(limit).to_list()
+        
+        mapped_items = []
+        for i in items:
+            mapped_items.append({
+                "id": i.id,
+                "tenant_id": i.tenant_id,
+                "organization_id": tenant_id,
+                "experiment_id": i.experiment_id,
+                "sample_id": i.sample_id,
+                "sequence_code": f"SEQ-{str(i.id).split('-')[0].upper()}",
+                "sequence_name": i.name,
+                "sequence_type": "RNA" if i.sequence_type.upper() == "MRNA" else ("DNA" if i.sequence_type.upper() not in ["DNA", "RNA", "PROTEIN"] else i.sequence_type.upper()),
+                "source": "Unknown",
+                "molecular_weight": getattr(i, 'molecular_weight', 0.0),
+                "sequence_data": i.sequence_data,
+                "length": i.length,
+                "gc_content": i.gc_content,
+                "status": i.status,
+                "version": 1,
+                "metadata_json": {},
+                "created_at": i.created_at,
+                "updated_at": i.updated_at
+            })
 
-    async def add_annotation(
-        self,
-        db: AsyncSession,
-        *,
-        sequence_id: UUID,
-        ann_in: SequenceAnnotationCreate,
-        current_user_id: Optional[UUID] = None,
-    ) -> SequenceAnnotation:
-        """Add a functional annotation to a sequence region."""
-        ann = SequenceAnnotation(
-            sequence_id=sequence_id,
-            annotation_type=ann_in.annotation_type,
-            label=ann_in.label,
-            start_position=ann_in.start_position,
-            end_position=ann_in.end_position,
-            strand=ann_in.strand,
-            notes=ann_in.notes,
-            created_by=current_user_id,
-        )
-        db.add(ann)
-        await db.commit()
-        await db.refresh(ann)
-        return ann
-
-    async def save_analysis_result(
-        self,
-        db: AsyncSession,
-        *,
-        sequence_id: UUID,
-        analysis_type: str,
-        tool_name: Optional[str],
-        tool_version: Optional[str],
-        result_summary: Optional[str],
-        result_json: dict,
-        performed_by: Optional[UUID],
-    ) -> SequenceAnalysisResult:
-        """Persist a sequence analysis result."""
-        result = SequenceAnalysisResult(
-            sequence_id=sequence_id,
-            analysis_type=analysis_type,
-            tool_name=tool_name,
-            tool_version=tool_version,
-            result_summary=result_summary,
-            result_json=result_json,
-            performed_by=performed_by,
-        )
-        db.add(result)
-        await db.commit()
-        await db.refresh(result)
-        return result
-
-    async def list_analysis_results(
-        self, db: AsyncSession, *, sequence_id: UUID
-    ) -> List[SequenceAnalysisResult]:
-        """Fetch all analysis results for a sequence."""
-        stmt = (
-            select(SequenceAnalysisResult)
-            .where(SequenceAnalysisResult.sequence_id == sequence_id)
-            .order_by(SequenceAnalysisResult.created_at.desc())
-        )
-        return list((await db.execute(stmt)).scalars().all())
-
+        return mapped_items, total
 
 sequence_repo = SequenceRepository()

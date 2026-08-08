@@ -24,12 +24,16 @@ import { InstrumentRegistryView } from '../features/instruments/InstrumentRegist
 import { InstrumentDetailView } from '../features/instruments/InstrumentDetailView';
 import { SequenceRegistryView } from '../features/sequences/SequenceRegistryView';
 import { SequenceDetailView } from '../features/sequences/SequenceDetailView';
+import { SequenceViewerView } from '../features/sequences/SequenceViewerView';
 import { SettingsView } from '../features/admin/SettingsView';
 import { AdminPanelView } from '../features/admin/AdminPanelView';
 import { AICopilotChatView } from '../features/ai-copilot/AICopilotChatView';
+import { NotificationsView } from '../features/notifications/NotificationsView';
+import { GlobalSearchView } from '../features/search/GlobalSearchView';
 import { AccessDeniedView } from '../components/views/AccessDeniedView';
 import { canViewViewMode } from '../utils/permissions';
 import { useCreateExperiment } from '../hooks/useExperiments';
+import { useUnreadNotificationCount } from '../hooks/useNotifications';
 
 // Icons
 import { Plus, X, FlaskConical, TestTube2, FolderOpen, Loader2, AlertCircle, Sparkles } from 'lucide-react';
@@ -37,17 +41,17 @@ import { Plus, X, FlaskConical, TestTube2, FolderOpen, Loader2, AlertCircle, Spa
 export function App() {
   const { isAuthenticated, user } = useAuth();
 
-  const [currentView, setCurrentView] = useState<ViewMode>('landing');
+  const [currentView, setCurrentView] = useState<ViewMode>('dashboard');
   const [loginAuthMode, setLoginAuthMode] = useState<'signin' | 'signup'>('signin');
   const [activePersona, setActivePersona] = useState<UserPersona>('Bench Scientist (Researcher)');
 
-  const [selectedExpId, setSelectedExpId] = useState<string | null>(null);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [selectedExpId, setSelectedExpId] = useState<string>('EXP-2024-101');
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('PROJ-001');
   const [selectedSampleId, setSelectedSampleId] = useState<string>('SMP-001024');
-  const [selectedProtocolId, setSelectedProtocolId] = useState<string>('');
-  const [selectedInventoryId, setSelectedInventoryId] = useState<string>('');
-  const [selectedInstrumentId, setSelectedInstrumentId] = useState<string>('');
-  const [selectedSequenceRegistryId, setSelectedSequenceRegistryId] = useState<string>('');
+  const [selectedProtocolId, setSelectedProtocolId] = useState<string>('SOP-RNA-001');
+  const [selectedInventoryId, setSelectedInventoryId] = useState<string>('INV-001');
+  const [selectedInstrumentId, setSelectedInstrumentId] = useState<string>('INS-001');
+  const [selectedSequenceRegistryId, setSelectedSequenceRegistryId] = useState<string>('SEQ-001');
 
   // Modal state
   const [showQuickCreateModal, setShowQuickCreateModal] = useState(false);
@@ -58,10 +62,12 @@ export function App() {
   const [newExpCode, setNewExpCode] = useState('');
   const [newExpObjective, setNewExpObjective] = useState('');
   const [newExpPriority, setNewExpPriority] = useState('MEDIUM');
+  const [newExpPlannedEndDate, setNewExpPlannedEndDate] = useState('');
   const [createError, setCreateError] = useState('');
 
   const createExperiment = useCreateExperiment();
-  const unreadNotificationsCount = 0;
+  const { data: unreadCountData } = useUnreadNotificationCount();
+  const unreadNotificationsCount = unreadCountData ?? 0;
 
   React.useEffect(() => {
     if (isAuthenticated && (currentView === 'landing' || currentView === 'login')) {
@@ -103,6 +109,18 @@ export function App() {
     setNewExpCode(`EXP-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 900) + 100)}`);
     setNewExpObjective('');
     setNewExpPriority('MEDIUM');
+    setNewExpPlannedEndDate('');
+    setCreateError('');
+    setShowQuickCreateModal(true);
+  };
+
+  const handleOpenNewExperimentModal = () => {
+    setCreateStep('experiment');
+    setNewExpTitle('');
+    setNewExpCode(`EXP-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 900) + 100)}`);
+    setNewExpObjective('');
+    setNewExpPriority('MEDIUM');
+    setNewExpPlannedEndDate('');
     setCreateError('');
     setShowQuickCreateModal(true);
   };
@@ -119,6 +137,7 @@ export function App() {
         status: 'draft',
       };
       if (newExpObjective.trim()) payload.objective = newExpObjective.trim();
+      if (newExpPlannedEndDate) payload.planned_end_date = newExpPlannedEndDate;
 
       const newExp = await createExperiment.mutateAsync(payload);
       setShowQuickCreateModal(false);
@@ -180,18 +199,22 @@ export function App() {
           ) : (
             <>
               {currentView === 'dashboard' && (
-                <DashboardView onSelectView={setCurrentView} onOpenExperiment={handleOpenExperiment} />
+                <DashboardView 
+                  onSelectView={setCurrentView} 
+                  onOpenExperiment={handleOpenExperiment} 
+                  onCreateExperiment={handleOpenNewExperimentModal}
+                />
               )}
               {currentView === 'projects' && <ProjectsView onSelectView={setCurrentView} onOpenProject={handleOpenProject} />}
-              {currentView === 'project_detail' && selectedProjectId && (
-                <ProjectDetailView projectId={selectedProjectId} onSelectView={setCurrentView} onOpenExperiment={handleOpenExperiment} />
+              {currentView === 'project_detail' && (
+                <ProjectDetailView projectId={selectedProjectId || 'PROJ-001'} onSelectView={setCurrentView} onOpenExperiment={handleOpenExperiment} />
               )}
               {currentView === 'experiments' && (
                 <ExperimentsListView onSelectView={setCurrentView} onOpenExperiment={handleOpenExperiment} />
               )}
               {currentView === 'eln' && (
                 <ExperimentEditorView
-                  experimentId={selectedExpId}
+                  experimentId={selectedExpId || 'EXP-2024-101'}
                   onSelectView={setCurrentView}
                   onOpenSampleDetail={handleOpenSampleDetail}
                 />
@@ -203,7 +226,7 @@ export function App() {
                 />
               )}
               {currentView === 'sample-detail' && (
-                <SampleDetailView sampleId={selectedSampleId} onSelectSample={setSelectedSampleId} onSelectView={setCurrentView} />
+                <SampleDetailView sampleId={selectedSampleId || 'SMP-001024'} onSelectSample={setSelectedSampleId} onSelectView={setCurrentView} />
               )}
               {currentView === 'protocols' && (
                 <ProtocolRegistryView
@@ -212,7 +235,7 @@ export function App() {
                 />
               )}
               {currentView === 'protocol-detail' && (
-                <ProtocolDetailView protocolId={selectedProtocolId} onSelectView={setCurrentView} />
+                <ProtocolDetailView protocolId={selectedProtocolId || 'SOP-RNA-001'} onSelectView={setCurrentView} />
               )}
               {currentView === 'inventory' && (
                 <InventoryRegistryView
@@ -221,7 +244,7 @@ export function App() {
                 />
               )}
               {currentView === 'inventory-detail' && (
-                <InventoryDetailView inventoryId={selectedInventoryId} onSelectView={setCurrentView} />
+                <InventoryDetailView inventoryId={selectedInventoryId || 'INV-001'} onSelectView={setCurrentView} />
               )}
               {currentView === 'instruments' && (
                 <InstrumentRegistryView
@@ -230,7 +253,7 @@ export function App() {
                 />
               )}
               {currentView === 'instrument-detail' && (
-                <InstrumentDetailView instrumentId={selectedInstrumentId} onSelectView={setCurrentView} />
+                <InstrumentDetailView instrumentId={selectedInstrumentId || 'INS-001'} onSelectView={setCurrentView} />
               )}
               {currentView === 'sequence-registry' && (
                 <SequenceRegistryView
@@ -239,11 +262,28 @@ export function App() {
                 />
               )}
               {currentView === 'sequence-detail' && (
-                <SequenceDetailView sequenceId={selectedSequenceRegistryId} onSelectView={setCurrentView} />
+                <SequenceDetailView sequenceId={selectedSequenceRegistryId || 'SEQ-001'} onSelectView={setCurrentView} />
+              )}
+              {currentView === 'sequences' && (
+                <SequenceViewerView onSelectView={setCurrentView} />
+              )}
+              {currentView === 'notifications' && (
+                <NotificationsView
+                  onSelectView={setCurrentView}
+                  onOpenProject={handleOpenProject}
+                  onOpenExperiment={handleOpenExperiment}
+                />
               )}
               {currentView === 'settings' && <SettingsView user={user as any} onSaveUser={() => {}} />}
               {currentView === 'admin' && <AdminPanelView onSelectView={setCurrentView} />}
               {currentView === 'ai-copilot' && <AICopilotChatView onSelectView={setCurrentView} />}
+              {currentView === 'search' && (
+                <GlobalSearchView
+                  onSelectView={setCurrentView}
+                  onOpenExperiment={handleOpenExperiment}
+                  onSelectSample={handleOpenSampleDetail}
+                />
+              )}
             </>
           )}
         </main>
@@ -390,6 +430,19 @@ export function App() {
                       </button>
                     ))}
                   </div>
+                </div>
+
+                {/* Planned Deadline */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-700 flex items-center gap-1">
+                    Planned Deadline (Admin / PI)
+                  </label>
+                  <input
+                    type="date"
+                    value={newExpPlannedEndDate}
+                    onChange={(e) => setNewExpPlannedEndDate(e.target.value)}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                  />
                 </div>
 
                 {/* AI hint */}

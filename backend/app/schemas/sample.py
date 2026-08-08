@@ -93,7 +93,7 @@ class SampleUpdate(BaseModel):
 class SampleRead(SampleBase):
     id: UUID = Field(..., description="Sample unique identifier")
     tenant_id: UUID = Field(..., description="Tenant workspace identifier")
-    organization_id: UUID = Field(..., description="Organization identifier")
+    organization_id: Optional[UUID] = Field(None, description="Organization identifier")
     experiment_id: UUID = Field(..., description="Parent experiment identifier")
     sample_type_id: Optional[UUID] = Field(None, description="Sample type identifier")
     storage_location_id: Optional[UUID] = Field(None, description="Storage location identifier")

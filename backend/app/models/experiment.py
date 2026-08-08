@@ -57,3 +57,27 @@ class ExperimentAttachment(Document):
 
     class Settings:
         name = "experiment_attachments"
+
+
+class ExperimentQAComment(Document):
+    id: UUID = Field(default_factory=uuid4)
+    experiment_id: UUID
+    tenant_id: UUID
+    author_id: UUID
+    author_name: str
+    author_role: str = "QA"
+    section_id: str
+    section_title: Optional[str] = None
+    target_text: Optional[str] = None
+    comment: str
+    category: str = "QA_REVIEW"
+    status: str = "open"  # 'open' | 'resolved'
+    resolved_by: Optional[str] = None
+    resolved_at: Optional[datetime] = None
+    resolution_note: Optional[str] = None
+    replies: List[Dict[str, Any]] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    class Settings:
+        name = "experiment_qa_comments"

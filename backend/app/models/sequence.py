@@ -15,12 +15,33 @@ class Sequence(Document):
     length: int = 0
     status: str = "active"
     gc_content: float = 0.0
+    molecular_weight: float = 0.0
     is_deleted: bool = False
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     class Settings:
         name = "sequences"
+
+    @property
+    def sequence_name(self) -> str:
+        return self.name
+
+    @property
+    def sequence_code(self) -> str:
+        return f"SEQ-{str(self.id).split('-')[0].upper()}"
+
+    @property
+    def source(self) -> str:
+        return "Unknown"
+
+    @property
+    def version(self) -> int:
+        return 1
+
+    @property
+    def organization_id(self) -> UUID:
+        return self.tenant_id
 
 class SequenceVersion(Document):
     id: UUID = Field(default_factory=uuid4)

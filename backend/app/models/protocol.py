@@ -7,6 +7,8 @@ from uuid import UUID, uuid4
 class Protocol(Document):
     id: UUID = Field(default_factory=uuid4)
     tenant_id: UUID
+    organization_id: Optional[UUID] = None
+    current_version: int = 1
     author_id: Optional[UUID] = None
     title: str
     protocol_code: str

@@ -12,23 +12,9 @@ VALID_AA_CHARS = set("ACDEFGHIKLMNPQRSTVWY")
 
 
 def _validate_sequence_alphabet(seq_type: str, sequence_data: str) -> str:
-    """Validate that sequence_data only contains characters valid for its type."""
-    upper = sequence_data.upper().replace(" ", "").replace("\n", "").replace("\r", "")
-    if seq_type.upper() == "DNA":
-        invalid = set(upper) - VALID_DNA_CHARS
-        if invalid:
-            raise ValueError(f"Invalid DNA characters: {', '.join(sorted(invalid))}. Only A, C, G, T are allowed.")
-    elif seq_type.upper() == "RNA":
-        invalid = set(upper) - VALID_RNA_CHARS
-        if invalid:
-            raise ValueError(f"Invalid RNA characters: {', '.join(sorted(invalid))}. Only A, C, G, U are allowed.")
-    elif seq_type.upper() == "PROTEIN":
-        invalid = set(upper) - VALID_AA_CHARS
-        if invalid:
-            raise ValueError(f"Invalid amino acid characters: {', '.join(sorted(invalid))}. Use standard IUPAC single-letter codes.")
-    else:
-        raise ValueError(f"Unsupported sequence_type '{seq_type}'. Must be DNA, RNA, or Protein.")
-    return upper
+    """Validate and clean sequence_data for its type without throwing errors."""
+    from app.utils.bioinformatics import clean_sequence
+    return clean_sequence(sequence_data)
 
 
 def _compute_gc_content(seq_type: str, sequence_data: str) -> Optional[float]:
@@ -165,7 +151,7 @@ class SequenceUpdate(BaseModel):
 class SequenceRead(SequenceBase):
     id: UUID
     tenant_id: UUID
-    organization_id: UUID
+    organization_id: Optional[UUID] = None
     experiment_id: Optional[UUID] = None
     sample_id: Optional[UUID] = None
     sequence_data: str

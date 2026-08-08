@@ -1,11 +1,7 @@
 import logging
 from datetime import datetime, timezone
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Any
 from uuid import UUID
-
-from sqlalchemy import func, or_, select
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.models.sample import (
     Sample,
@@ -24,7 +20,6 @@ class SampleRepository:
 
     async def create(
         self,
-        db: AsyncSession,
         *,
         obj_in: SampleCreate,
         tenant_id: UUID,
@@ -33,90 +28,71 @@ class SampleRepository:
         """Create a new Sample record and log initial chain-of-custody event."""
         sample = Sample(
             tenant_id=tenant_id,
-            organization_id=obj_in.organization_id,
             experiment_id=obj_in.experiment_id,
             sample_type_id=obj_in.sample_type_id,
-            storage_location_id=obj_in.storage_location_id,
-            parent_sample_id=obj_in.parent_sample_id,
+            location_id=obj_in.storage_location_id,
+            owner_id=current_user_id,
+            name=obj_in.sample_name,
             sample_code=obj_in.sample_code,
             barcode=obj_in.barcode,
-            sample_name=obj_in.sample_name,
+            status=obj_in.status or "available",
             quantity=obj_in.quantity,
             unit=obj_in.unit,
-            concentration=obj_in.concentration,
-            storage_temperature=obj_in.storage_temperature,
-            collection_date=obj_in.collection_date,
-            expiry_date=obj_in.expiry_date,
-            status=obj_in.status,
-            metadata_json=obj_in.metadata_json,
-            created_by=current_user_id,
-            updated_by=current_user_id,
+            metadata_json=obj_in.metadata_json or {},
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
         )
-        db.add(sample)
-        await db.flush()
+        await sample.insert()
 
         # Initial chain of custody record
         if current_user_id:
             coc = SampleChainOfCustody(
                 sample_id=sample.id,
                 action="registered",
-                custodian_id=current_user_id,
-                remarks="Initial sample registration into laboratory registry.",
+                user_id=current_user_id,
+                notes="Initial sample registration into laboratory registry.",
+                created_at=datetime.now(timezone.utc),
             )
-            db.add(coc)
+            await coc.insert()
 
-        await db.commit()
-        await db.refresh(sample)
         return sample
 
     async def get_by_id(
-        self, db: AsyncSession, *, id: UUID, tenant_id: UUID, include_details: bool = False
+        self, *, id: UUID, tenant_id: UUID, include_details: bool = False
     ) -> Optional[Sample]:
         """Fetch Sample by ID within tenant scope."""
-        stmt = select(Sample).where(
+        sample = await Sample.find_one(
             Sample.id == id,
             Sample.tenant_id == tenant_id,
             Sample.is_deleted == False
         )
-        if include_details:
-            stmt = stmt.options(
-                selectinload(Sample.chain_of_custody),
-                selectinload(Sample.attachments),
-                selectinload(Sample.sample_type),
-                selectinload(Sample.storage_location),
-                selectinload(Sample.experiment),
-            )
-        res = await db.execute(stmt)
-        return res.scalar_one_or_none()
+        return sample
 
     async def get_by_barcode(
-        self, db: AsyncSession, *, barcode: str, tenant_id: UUID
+        self, *, barcode: str, tenant_id: UUID
     ) -> Optional[Sample]:
         """Fetch Sample by barcode within tenant scope."""
-        stmt = select(Sample).where(
+        sample = await Sample.find_one(
             Sample.barcode == barcode.upper(),
             Sample.tenant_id == tenant_id,
             Sample.is_deleted == False
         )
-        res = await db.execute(stmt)
-        return res.scalar_one_or_none()
+        return sample
 
     async def get_by_code(
-        self, db: AsyncSession, *, experiment_id: UUID, sample_code: str, tenant_id: UUID
+        self, *, experiment_id: UUID, sample_code: str, tenant_id: UUID
     ) -> Optional[Sample]:
         """Fetch Sample by sample_code within experiment and tenant scope."""
-        stmt = select(Sample).where(
+        sample = await Sample.find_one(
             Sample.experiment_id == experiment_id,
             Sample.sample_code == sample_code.upper(),
             Sample.tenant_id == tenant_id,
             Sample.is_deleted == False
         )
-        res = await db.execute(stmt)
-        return res.scalar_one_or_none()
+        return sample
 
     async def update(
         self,
-        db: AsyncSession,
         *,
         db_obj: Sample,
         obj_in: SampleUpdate,
@@ -124,164 +100,154 @@ class SampleRepository:
     ) -> Sample:
         """Update existing Sample attributes."""
         update_data = obj_in.model_dump(exclude_unset=True)
+        # mapped attributes
+        mapping = {
+            "sample_name": "name",
+            "storage_location_id": "location_id"
+        }
         for field, value in update_data.items():
-            setattr(db_obj, field, value)
+            if field in mapping:
+                setattr(db_obj, mapping[field], value)
+            elif hasattr(db_obj, field):
+                setattr(db_obj, field, value)
 
-        db_obj.updated_by = current_user_id
         db_obj.updated_at = datetime.now(timezone.utc)
-        db.add(db_obj)
+        await db_obj.save()
 
         if current_user_id:
             coc = SampleChainOfCustody(
                 sample_id=db_obj.id,
                 action="updated",
-                custodian_id=current_user_id,
-                remarks=f"Sample updated. Status: {db_obj.status}, Quantity: {db_obj.quantity}{db_obj.unit}",
+                user_id=current_user_id,
+                notes=f"Sample updated. Status: {db_obj.status}, Quantity: {db_obj.quantity}{db_obj.unit}",
+                created_at=datetime.now(timezone.utc),
             )
-            db.add(coc)
+            await coc.insert()
 
-        await db.commit()
-        await db.refresh(db_obj)
         return db_obj
 
     async def archive(
-        self, db: AsyncSession, *, sample_id: UUID, tenant_id: UUID, current_user_id: Optional[UUID] = None
+        self, *, sample_id: UUID, tenant_id: UUID, current_user_id: Optional[UUID] = None
     ) -> Optional[Sample]:
         """Archive a Sample."""
-        sample = await self.get_by_id(db, id=sample_id, tenant_id=tenant_id)
+        sample = await self.get_by_id(id=sample_id, tenant_id=tenant_id)
         if not sample:
             return None
 
-        sample.is_archived = True
-        sample.archived_at = datetime.now(timezone.utc)
         sample.status = "archived"
-        sample.updated_by = current_user_id
-        db.add(sample)
-        await db.commit()
-        await db.refresh(sample)
+        sample.updated_at = datetime.now(timezone.utc)
+        await sample.save()
         return sample
 
     async def restore(
-        self, db: AsyncSession, *, sample_id: UUID, tenant_id: UUID, current_user_id: Optional[UUID] = None
+        self, *, sample_id: UUID, tenant_id: UUID, current_user_id: Optional[UUID] = None
     ) -> Optional[Sample]:
         """Restore an archived Sample."""
-        sample = await self.get_by_id(db, id=sample_id, tenant_id=tenant_id)
+        sample = await self.get_by_id(id=sample_id, tenant_id=tenant_id)
         if not sample:
             return None
 
-        sample.is_archived = False
-        sample.archived_at = None
         sample.status = "available"
-        sample.updated_by = current_user_id
-        db.add(sample)
-        await db.commit()
-        await db.refresh(sample)
+        sample.updated_at = datetime.now(timezone.utc)
+        await sample.save()
         return sample
 
     async def soft_delete(
-        self, db: AsyncSession, *, id: UUID, tenant_id: UUID, current_user_id: Optional[UUID] = None
+        self, *, id: UUID, tenant_id: UUID, current_user_id: Optional[UUID] = None
     ) -> bool:
         """Soft-delete Sample."""
-        sample = await self.get_by_id(db, id=id, tenant_id=tenant_id)
+        sample = await self.get_by_id(id=id, tenant_id=tenant_id)
         if not sample:
             return False
 
         sample.is_deleted = True
-        sample.deleted_at = datetime.now(timezone.utc)
-        sample.deleted_by = current_user_id
-        db.add(sample)
-        await db.commit()
+        sample.updated_at = datetime.now(timezone.utc)
+        await sample.save()
         return True
 
     async def list_samples(
         self,
-        db: AsyncSession,
         *,
         tenant_id: UUID,
         filter_params: SampleFilter,
         pagination: SamplePagination
-    ) -> Tuple[List[Sample], int]:
+    ) -> Tuple[List[dict], int]:
         """List and search Samples with filtering and pagination."""
-        query = select(Sample).where(
+        query = Sample.find(
             Sample.tenant_id == tenant_id,
             Sample.is_deleted == False
         )
 
         if filter_params.experiment_id:
-            query = query.where(Sample.experiment_id == filter_params.experiment_id)
+            query = query.find(Sample.experiment_id == filter_params.experiment_id)
         if filter_params.sample_type_id:
-            query = query.where(Sample.sample_type_id == filter_params.sample_type_id)
+            query = query.find(Sample.sample_type_id == filter_params.sample_type_id)
         if filter_params.storage_location_id:
-            query = query.where(Sample.storage_location_id == filter_params.storage_location_id)
+            query = query.find(Sample.location_id == filter_params.storage_location_id)
         if filter_params.status:
-            query = query.where(Sample.status == filter_params.status)
+            query = query.find(Sample.status == filter_params.status)
         if filter_params.barcode:
-            query = query.where(Sample.barcode == filter_params.barcode.upper())
+            query = query.find(Sample.barcode == filter_params.barcode.upper())
         if filter_params.search:
-            pattern = f"%{filter_params.search}%"
-            query = query.where(
-                or_(
-                    Sample.sample_code.ilike(pattern),
-                    Sample.barcode.ilike(pattern),
-                    Sample.sample_name.ilike(pattern),
-                )
-            )
+            query = query.find({"$or": [
+                {"sample_code": {"$regex": filter_params.search, "$options": "i"}},
+                {"barcode": {"$regex": filter_params.search, "$options": "i"}},
+                {"name": {"$regex": filter_params.search, "$options": "i"}},
+            ]})
 
-        # Count total
-        count_stmt = select(func.count()).select_from(query.subquery())
-        count_res = await db.execute(count_stmt)
-        total = count_res.scalar_one() or 0
-
-        # Sorting & Pagination
-        sort_col = getattr(Sample, pagination.sort_by, Sample.created_at)
-        if pagination.sort_order.lower() == "desc":
-            query = query.order_by(sort_col.desc())
-        else:
-            query = query.order_by(sort_col.asc())
-
-        offset = (pagination.page - 1) * pagination.page_size
-        query = query.offset(offset).limit(pagination.page_size)
-
-        res = await db.execute(query)
-        items = list(res.scalars().all())
-        return items, total
+        total = await query.count()
+        skip = (pagination.page - 1) * pagination.page_size
+        items = await query.sort(-Sample.created_at).skip(skip).limit(pagination.page_size).to_list()
+        
+        mapped_items = []
+        for i in items:
+            mapped_items.append({
+                "id": i.id,
+                "tenant_id": i.tenant_id,
+                "organization_id": i.tenant_id,
+                "experiment_id": i.experiment_id,
+                "sample_type_id": i.sample_type_id,
+                "storage_location_id": i.location_id,
+                "owner_id": i.owner_id,
+                "sample_name": i.name,
+                "sample_code": i.sample_code,
+                "barcode": i.barcode,
+                "status": i.status,
+                "quantity": i.quantity,
+                "unit": i.unit,
+                "created_at": i.created_at,
+                "updated_at": i.updated_at,
+            })
+            
+        return mapped_items, total
 
     async def log_chain_of_custody(
         self,
-        db: AsyncSession,
         *,
         sample_id: UUID,
         action: str,
-        custodian_id: UUID,
+        user_id: UUID,
         remarks: Optional[str] = None
     ) -> SampleChainOfCustody:
-        """Log a new chain-of-custody audit event."""
         coc = SampleChainOfCustody(
             sample_id=sample_id,
             action=action,
-            custodian_id=custodian_id,
-            remarks=remarks,
+            user_id=user_id,
+            notes=remarks,
+            created_at=datetime.now(timezone.utc),
         )
-        db.add(coc)
-        await db.commit()
-        await db.refresh(coc)
+        await coc.insert()
         return coc
 
-    async def get_chain_of_custody_history(
-        self, db: AsyncSession, *, sample_id: UUID
+    async def get_chain_of_custody(
+        self, *, sample_id: UUID
     ) -> List[SampleChainOfCustody]:
-        """Fetch chain of custody history for a sample."""
-        stmt = (
-            select(SampleChainOfCustody)
-            .where(SampleChainOfCustody.sample_id == sample_id)
-            .order_by(SampleChainOfCustody.performed_at.desc())
-        )
-        res = await db.execute(stmt)
-        return list(res.scalars().all())
+        return await SampleChainOfCustody.find(
+            SampleChainOfCustody.sample_id == sample_id
+        ).sort(-SampleChainOfCustody.created_at).to_list()
 
     async def add_attachment(
         self,
-        db: AsyncSession,
         *,
         sample_id: UUID,
         filename: str,

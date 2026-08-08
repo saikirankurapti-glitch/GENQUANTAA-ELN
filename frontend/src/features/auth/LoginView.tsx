@@ -216,6 +216,8 @@ export const LoginView: React.FC<LoginViewProps> = ({
               <ArrowRight className="w-4 h-4" />
             </button>
 
+
+
             <p className="text-[11px] text-center text-slate-400 pt-2">
               Don't have an account yet?{' '}
               <button

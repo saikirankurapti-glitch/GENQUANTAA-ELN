@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { ViewMode } from '../../types';
-import { ArrowLeft, FlaskConical, FolderKanban, Loader2, AlertCircle, Plus, Calendar, Target, Tag } from 'lucide-react';
-import { useProject } from '../../hooks/useProjects';
+import { ArrowLeft, FlaskConical, FolderKanban, Loader2, AlertCircle, Plus, Calendar, Target, Tag, Users, UserPlus, X } from 'lucide-react';
+import { useProject, useAddCollaborator, useUpdateProject } from '../../hooks/useProjects';
 import { useExperiments, useCreateExperiment } from '../../hooks/useExperiments';
+import { useUsers } from '../../hooks/useUsers';
 import { useAuth } from '../../providers/AuthProvider';
+import { canCreateExperiment, canManageTeam, isUserAdmin, normalizeRole } from '../../utils/permissions';
 
 interface ProjectDetailViewProps {
   projectId: string;
@@ -17,7 +19,33 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
   onOpenExperiment
 }) => {
   const { user } = useAuth();
+  const canCreateExp = canCreateExperiment(user);
+  const canManage = canManageTeam(user);
+  const isDeadlineManager = isUserAdmin(user) || normalizeRole(user) === 'PI';
   const { data: project, isLoading: projectLoading, error: projectError } = useProject(projectId);
+  const updateProject = useUpdateProject();
+
+  const [isEditingDeadline, setIsEditingDeadline] = useState(false);
+  const [targetDateVal, setTargetDateVal] = useState('');
+
+  React.useEffect(() => {
+    if (project?.target_end_date) {
+      setTargetDateVal(new Date(project.target_end_date).toISOString().split('T')[0]);
+    }
+  }, [project?.target_end_date]);
+
+  const handleSaveDeadline = async () => {
+    if (!project) return;
+    try {
+      await updateProject.mutateAsync({
+        id: project.id,
+        data: { target_end_date: targetDateVal || null }
+      });
+      setIsEditingDeadline(false);
+    } catch (err) {
+      console.error("Failed to update deadline:", err);
+    }
+  };
   
   const [page, setPage] = useState(1);
   const pageSize = 10;
@@ -43,6 +71,32 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
       onOpenExperiment((newExp as any).id || (newExp as any).experiment_code);
     } catch (e) {
       console.error("Failed to create experiment", e);
+    }
+  };
+
+  // Add Member Modal State
+  const [showMemberModal, setShowMemberModal] = useState(false);
+  const [userSearch, setUserSearch] = useState('');
+  const [selectedUser, setSelectedUser] = useState<string>('');
+  const [selectedRole, setSelectedRole] = useState('Researcher');
+  
+  const { data: usersData, isLoading: usersLoading } = useUsers(1, 20, userSearch);
+  const addCollaborator = useAddCollaborator();
+
+  const handleAddMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedUser) return;
+    try {
+      await addCollaborator.mutateAsync({
+        projectId,
+        userId: selectedUser,
+        role: selectedRole
+      });
+      setShowMemberModal(false);
+      setSelectedUser('');
+      setUserSearch('');
+    } catch (e) {
+      console.error("Failed to add member", e);
     }
   };
 
@@ -146,6 +200,103 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                   </span>
                 </div>
               </div>
+
+              <div className="pt-4 border-t border-slate-100 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-slate-500 flex items-center gap-1">
+                    <Calendar className="w-3.5 h-3.5 text-blue-600" /> Target Completion Deadline
+                  </p>
+                  {isDeadlineManager && (
+                    <button 
+                      onClick={() => setIsEditingDeadline(!isEditingDeadline)}
+                      className="text-[10px] font-bold text-blue-600 hover:underline cursor-pointer"
+                    >
+                      {isEditingDeadline ? 'Cancel' : project.target_end_date ? 'Edit Deadline' : '+ Set Deadline'}
+                    </button>
+                  )}
+                </div>
+
+                {isEditingDeadline ? (
+                  <div className="flex items-center gap-2 pt-1">
+                    <input
+                      type="date"
+                      value={targetDateVal}
+                      onChange={(e) => setTargetDateVal(e.target.value)}
+                      className="border border-slate-200 rounded p-1.5 text-xs focus:ring-2 focus:ring-blue-500"
+                    />
+                    <button
+                      onClick={handleSaveDeadline}
+                      disabled={updateProject.isPending}
+                      className="bg-blue-600 text-white text-xs px-3 py-1.5 rounded-lg font-bold hover:bg-blue-700 disabled:opacity-50 cursor-pointer"
+                    >
+                      {updateProject.isPending ? 'Saving...' : 'Save'}
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    {project.target_end_date ? (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-bold text-slate-800">
+                          {new Date(project.target_end_date).toLocaleDateString()}
+                        </p>
+                        {(() => {
+                          const diffDays = Math.ceil((new Date(project.target_end_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+                          if (project.status === 'COMPLETED') return <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">Completed</span>;
+                          if (diffDays < 0) return <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200">⚠ {Math.abs(diffDays)}d Overdue</span>;
+                          if (diffDays === 0) return <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">⏰ Due Today</span>;
+                          if (diffDays <= 7) return <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">⏰ {diffDays}d left</span>;
+                          return <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">{diffDays}d remaining</span>;
+                        })()}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-400 italic">No deadline configured by Admin/PI.</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Team Members Section */}
+          <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-2">
+              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                <Users className="w-4 h-4 text-indigo-600" />
+                Team Members
+              </h3>
+              {canManage && (
+                <button 
+                  onClick={() => setShowMemberModal(true)}
+                  className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded transition-colors flex items-center gap-1 cursor-pointer"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  Add
+                </button>
+              )}
+            </div>
+            
+            <div className="space-y-3">
+              <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-100">
+                <div>
+                  <p className="text-xs font-bold text-slate-800">Owner</p>
+                  <p className="text-[10px] text-slate-500">Project Creator</p>
+                </div>
+                <span className="text-[10px] font-bold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded uppercase">Owner</span>
+              </div>
+              
+              {project.collaborators && project.collaborators.length > 0 ? (
+                project.collaborators.map((collab: any) => (
+                  <div key={collab.user_id} className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 border border-transparent hover:border-slate-100 transition-colors">
+                    <div>
+                      <p className="text-xs font-bold text-slate-800">{collab.user?.first_name} {collab.user?.last_name} {collab.user ? '' : collab.user_id}</p>
+                      <p className="text-[10px] text-slate-500">{collab.user?.email || 'User'}</p>
+                    </div>
+                    <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded uppercase">{collab.role}</span>
+                  </div>
+                ))
+              ) : (
+                <p className="text-xs text-slate-500 text-center py-2">No additional members.</p>
+              )}
             </div>
           </div>
         </div>
@@ -158,14 +309,16 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                 <h3 className="font-bold text-slate-800">Project Experiments</h3>
                 <p className="text-xs text-slate-500">{experimentsData?.total || 0} total experiments</p>
               </div>
-              <button
-                onClick={handleCreateExperiment}
-                disabled={createExperiment.isPending}
-                className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-sm transition-colors cursor-pointer disabled:opacity-50"
-              >
-                {createExperiment.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                <span>New Experiment</span>
-              </button>
+              {canCreateExp && (
+                <button
+                  onClick={handleCreateExperiment}
+                  disabled={createExperiment.isPending}
+                  className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-sm transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {createExperiment.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                  <span>New Experiment</span>
+                </button>
+              )}
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
@@ -237,6 +390,84 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Add Member Modal */}
+      {showMemberModal && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-slate-800">Add Team Member</h3>
+              <button onClick={() => setShowMemberModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleAddMember} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Search User</label>
+                <input
+                  type="text"
+                  placeholder="Type name or email..."
+                  value={userSearch}
+                  onChange={(e) => setUserSearch(e.target.value)}
+                  className="w-full border border-slate-200 rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-indigo-500 mb-2"
+                />
+                
+                <div className="border border-slate-200 rounded-lg max-h-40 overflow-y-auto bg-slate-50 p-1 space-y-1">
+                  {usersLoading ? (
+                    <div className="flex justify-center p-4"><Loader2 className="w-4 h-4 animate-spin text-slate-400" /></div>
+                  ) : usersData?.items?.length === 0 ? (
+                    <div className="text-xs text-slate-500 p-2 text-center">No users found</div>
+                  ) : (
+                    usersData?.items?.map(u => (
+                      <div 
+                        key={u.id}
+                        onClick={() => setSelectedUser(u.id)}
+                        className={`p-2 rounded cursor-pointer flex flex-col ${selectedUser === u.id ? 'bg-indigo-100 border border-indigo-200' : 'hover:bg-white border border-transparent'}`}
+                      >
+                        <span className="text-xs font-bold text-slate-800">{u.first_name} {u.last_name}</span>
+                        <span className="text-[10px] text-slate-500">{u.email}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Project Role</label>
+                <select
+                  value={selectedRole}
+                  onChange={(e) => setSelectedRole(e.target.value)}
+                  className="w-full border border-slate-200 rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-indigo-500 bg-white"
+                >
+                  <option value="Researcher">Researcher</option>
+                  <option value="Bioinformatician">Bioinformatician</option>
+                  <option value="QA">QA</option>
+                  <option value="Viewer">Viewer</option>
+                  <option value="PI">Principal Investigator (PI)</option>
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowMemberModal(false)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!selectedUser || addCollaborator.isPending}
+                  className="px-4 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-sm cursor-pointer disabled:opacity-50"
+                >
+                  {addCollaborator.isPending ? 'Adding...' : 'Add Member'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

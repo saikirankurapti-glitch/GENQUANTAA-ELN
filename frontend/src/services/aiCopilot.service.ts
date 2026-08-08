@@ -29,7 +29,7 @@ export interface ChatResponsePayload {
 }
 
 export const aiCopilotService = {
-  async sendChatMessage(payload: ChatRequestPayload) {
+  async sendChatMessage(payload: ChatRequestPayload): Promise<ChatResponsePayload> {
     const response = await apiClient.post('/ai/chat', {
       message: payload.message,
       feature: payload.feature || 'qa',
@@ -39,4 +39,30 @@ export const aiCopilotService = {
     });
     return response.data;
   },
+
+  async ask(prompt: string, feature: string = 'copilot'): Promise<{ response: string }> {
+    const resp = await this.sendChatMessage({
+      message: prompt,
+      feature,
+    });
+    return { response: resp.content || '' };
+  },
+
+  async generateSOP(title: string, domain: string = 'General'): Promise<{ content: string }> {
+    const prompt = `Generate a rigorous 5-step Standard Operating Procedure (SOP) protocol for an experiment titled: "${title}" in the domain of ${domain}. Return numbered steps only.`;
+    const resp = await this.sendChatMessage({
+      message: prompt,
+      feature: 'protocol_generator',
+    });
+    return { content: resp.content || '' };
+  },
+
+  async summarizeExperiment(experimentId: string, objective: string, results: string): Promise<{ summary: string }> {
+    const prompt = `Summarize this scientific experiment in 2 concise executive paragraphs. Objective: ${objective}. Results: ${results}.`;
+    const resp = await this.sendChatMessage({
+      message: prompt,
+      feature: 'summarize',
+    });
+    return { summary: resp.content || '' };
+  }
 };

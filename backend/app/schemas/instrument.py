@@ -178,6 +178,7 @@ class InstrumentFilter(BaseModel):
     operational_status: Optional[str] = None
     availability_status: Optional[str] = None
     is_calibration_overdue: Optional[bool] = Field(None, description="Filter items with overdue calibration")
+    is_maintenance_overdue: Optional[bool] = Field(None, description="Filter items with overdue maintenance")
     search: Optional[str] = Field(None, description="Search keyword matching code, serial, asset tag, or name")
 
 

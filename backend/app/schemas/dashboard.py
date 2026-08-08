@@ -53,9 +53,11 @@ class AICopilotShortcut(BaseModel):
 
 
 class DashboardResponse(BaseModel):
-    project_count: int = Field(0, description="Total active projects in current tenant")
+    project_count: int = Field(0, description="Total active projects/workspaces for current user/tenant")
     active_experiment_count: int = Field(0, description="Active/in-progress experiments count")
     completed_experiment_count: int = Field(0, description="Completed/approved experiments count")
+    review_required_count: int = Field(0, description="Experiments requiring review")
+    total_samples_count: int = Field(0, description="Total registered samples in inventory")
     recent_experiments: List[ExperimentSummary] = Field(default_factory=list, description="Top N recently accessed experiments")
     pending_notifications: List[NotificationSummary] = Field(default_factory=list, description="Unread pending notifications")
     quick_actions: List[QuickAction] = Field(default_factory=list, description="Contextual quick create actions")

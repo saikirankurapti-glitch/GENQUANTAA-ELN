@@ -55,6 +55,13 @@ class ProjectBase(BaseModel):
             raise ValueError("Project code cannot be blank.")
         return v
 
+    @field_validator("start_date", "target_end_date", mode="before")
+    @classmethod
+    def parse_datetime_to_date(cls, v: Any) -> Any:
+        if isinstance(v, datetime):
+            return v.date()
+        return v
+
 
 class ProjectCreate(ProjectBase):
     organization_id: Optional[UUID] = Field(None, description="Target Organization identifier")

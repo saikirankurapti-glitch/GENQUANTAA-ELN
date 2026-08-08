@@ -156,11 +156,17 @@ export interface AIChatMessage {
 export interface NotificationItem {
   id: string;
   title: string;
-  description: string;
-  timestamp: string;
-  type: 'mention' | 'assignment' | 'status_change' | 'ai_summary';
-  read: boolean;
-  user: string;
+  message?: string;
+  description?: string;
+  timestamp?: string;
+  created_at?: string;
+  type: 'mention' | 'assignment' | 'review' | 'status_change' | 'ai_summary' | 'info' | 'action_required' | string;
+  read?: boolean;
+  is_read?: boolean;
+  user?: string;
+  sender_name?: string;
+  entity_type?: 'project' | 'experiment' | 'protocol' | 'sample' | 'notebook' | string;
+  entity_id?: string;
 }
 
 export interface AuditLogItem {
@@ -191,4 +197,40 @@ export interface FileItem {
   modifiedDate: string;
   owner: string;
   sharedWith: string[];
+}
+
+export interface QACommentReply {
+  id: string;
+  author_id: string;
+  author_name: string;
+  author_role: string;
+  comment: string;
+  created_at: string;
+}
+
+export interface QAComment {
+  id: string;
+  experiment_id: string;
+  author_id: string;
+  author_name: string;
+  author_role: string;
+  section_id: string;
+  section_title?: string;
+  target_text?: string;
+  comment: string;
+  category: 'QA_REVIEW' | 'COMPLIANCE_CHECK' | 'SCIENTIFIC_QUESTION' | 'SUGGESTION' | string;
+  status: 'open' | 'resolved';
+  resolved_by?: string;
+  resolved_at?: string;
+  resolution_note?: string;
+  created_at: string;
+  replies: QACommentReply[];
+}
+
+export interface QACommentCreate {
+  section_id: string;
+  section_title?: string;
+  target_text?: string;
+  comment: string;
+  category?: string;
 }

@@ -3,9 +3,7 @@ from typing import Any, List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_db
 from app.core.security.authorization import (
     get_current_active_user,
     get_current_tenant,
@@ -47,9 +45,7 @@ router = APIRouter()
     summary="List Notebook Entries",
     description="Fetch paginated notebook entries for current tenant with filtering and sorting.",
 )
-async def list_notebook_entries(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+async def list_notebook_entries(    current_user: User = Depends(get_current_active_user),
     current_tenant: Tenant = Depends(get_current_tenant),
     experiment_id: Optional[UUID] = Query(None),
     entry_type: Optional[str] = Query(None),
@@ -67,8 +63,7 @@ async def list_notebook_entries(
         pagination = NotebookPagination(
             page=page, page_size=page_size, sort_by=sort_by, sort_order=sort_order
         )
-        items, total = await notebook_service.list_entries(
-            db, tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination
+        items, total = await notebook_service.list_entries(tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination
         )
         total_pages = math.ceil(total / page_size) if total > 0 else 1
 
@@ -96,9 +91,7 @@ async def list_notebook_entries(
     summary="Search Notebook Entries",
     description="Search notebook entries by title or content query.",
 )
-async def search_notebook_entries(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+async def search_notebook_entries(    current_user: User = Depends(get_current_active_user),
     current_tenant: Tenant = Depends(get_current_tenant),
     q: str = Query(..., min_length=1, description="Search keyword"),
     page: int = Query(1, ge=1),
@@ -108,8 +101,7 @@ async def search_notebook_entries(
     try:
         filter_params = NotebookFilter(search=q)
         pagination = NotebookPagination(page=page, page_size=page_size)
-        items, total = await notebook_service.list_entries(
-            db, tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination
+        items, total = await notebook_service.list_entries(tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination
         )
         total_pages = math.ceil(total / page_size) if total > 0 else 1
 
@@ -138,16 +130,13 @@ async def search_notebook_entries(
     description="Create a new notebook entry and initial Version 1 snapshot.",
 )
 async def create_notebook_entry(
-    *,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    *,    current_user: User = Depends(get_current_active_user),
     current_tenant: Tenant = Depends(get_current_tenant),
     entry_in: NotebookEntryCreate,
 ) -> Any:
     """Create notebook entry."""
     try:
-        entry = await notebook_service.create_entry(
-            db, obj_in=entry_in, tenant_id=current_tenant.id, current_user=current_user
+        entry = await notebook_service.create_entry(obj_in=entry_in, tenant_id=current_tenant.id, current_user=current_user
         )
         return NotebookEntryRead.model_validate(entry)
     except ExperimentArchivedOrNotFound as e:
@@ -164,15 +153,12 @@ async def create_notebook_entry(
     description="Fetch notebook entry detail including versions, comments, tags, and attachments.",
 )
 async def get_notebook_entry(
-    id: UUID,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    id: UUID,    current_user: User = Depends(get_current_active_user),
     current_tenant: Tenant = Depends(get_current_tenant),
 ) -> Any:
     """Fetch notebook entry detail."""
     try:
-        entry = await notebook_service.get_entry(
-            db, entry_id=id, tenant_id=current_tenant.id, include_details=True
+        entry = await notebook_service.get_entry(entry_id=id, tenant_id=current_tenant.id, include_details=True
         )
         return NotebookEntryDetail.model_validate(entry)
     except NotebookEntryNotFound as e:
@@ -188,16 +174,13 @@ async def get_notebook_entry(
 )
 async def update_notebook_entry(
     id: UUID,
-    *,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    *,    current_user: User = Depends(get_current_active_user),
     current_tenant: Tenant = Depends(get_current_tenant),
     entry_in: NotebookEntryUpdate,
 ) -> Any:
     """Update notebook entry."""
     try:
-        entry, _ = await notebook_service.update_entry(
-            db, entry_id=id, obj_in=entry_in, tenant_id=current_tenant.id, current_user=current_user
+        entry, _ = await notebook_service.update_entry(entry_id=id, obj_in=entry_in, tenant_id=current_tenant.id, current_user=current_user
         )
         return NotebookEntryRead.model_validate(entry)
     except NotebookEntryNotFound as e:
@@ -214,15 +197,12 @@ async def update_notebook_entry(
     description="Fetch all historical version snapshots for a notebook entry.",
 )
 async def get_version_history(
-    id: UUID,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    id: UUID,    current_user: User = Depends(get_current_active_user),
     current_tenant: Tenant = Depends(get_current_tenant),
 ) -> Any:
     """Fetch version history."""
     try:
-        versions = await notebook_service.list_versions(
-            db, entry_id=id, tenant_id=current_tenant.id
+        versions = await notebook_service.list_versions(entry_id=id, tenant_id=current_tenant.id
         )
         return [NotebookEntryVersionRead.model_validate(v) for v in versions]
     except NotebookEntryNotFound as e:
@@ -238,16 +218,13 @@ async def get_version_history(
 )
 async def add_comment(
     id: UUID,
-    *,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    *,    current_user: User = Depends(get_current_active_user),
     current_tenant: Tenant = Depends(get_current_tenant),
     comment_in: NotebookCommentCreate,
 ) -> Any:
     """Add comment."""
     try:
-        comment = await notebook_service.add_comment(
-            db, entry_id=id, obj_in=comment_in, tenant_id=current_tenant.id, current_user=current_user
+        comment = await notebook_service.add_comment(entry_id=id, obj_in=comment_in, tenant_id=current_tenant.id, current_user=current_user
         )
         return NotebookCommentRead.model_validate(comment)
     except NotebookEntryNotFound as e:
@@ -263,16 +240,13 @@ async def add_comment(
 )
 async def add_tag(
     id: UUID,
-    *,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    *,    current_user: User = Depends(get_current_active_user),
     current_tenant: Tenant = Depends(get_current_tenant),
     tag_in: NotebookTagCreate,
 ) -> Any:
     """Add tag."""
     try:
-        tag = await notebook_service.add_tag(
-            db, entry_id=id, obj_in=tag_in, tenant_id=current_tenant.id, current_user=current_user
+        tag = await notebook_service.add_tag(entry_id=id, obj_in=tag_in, tenant_id=current_tenant.id, current_user=current_user
         )
         return NotebookTagRead.model_validate(tag)
     except NotebookEntryNotFound as e:

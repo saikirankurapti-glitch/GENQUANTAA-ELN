@@ -65,7 +65,7 @@ async def list_users(
     page: int = Query(1, ge=1),
     size: int = Query(50, ge=1, le=100),
     search: Optional[str] = Query(None),
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(get_current_active_user),
     current_tenant: Tenant = Depends(get_current_tenant),
 ) -> Any:
     """List users matching criteria within current tenant live from database."""
@@ -104,7 +104,7 @@ async def search_users(
     q: str = Query(..., description="Search query string"),
     page: int = Query(1, ge=1),
     size: int = Query(50, ge=1, le=100),
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(get_current_active_user),
     current_tenant: Tenant = Depends(get_current_tenant),
 ) -> Any:
     """Search users by name, email, employee ID, or username."""

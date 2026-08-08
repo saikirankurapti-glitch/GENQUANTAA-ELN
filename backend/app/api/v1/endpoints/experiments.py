@@ -5,9 +5,7 @@ from typing import Any, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_db
 from app.core.security.authorization import (
     get_current_active_user,
     get_current_tenant,
@@ -27,6 +25,10 @@ from app.schemas.experiment import (
     ExperimentPagination,
     ExperimentRead,
     ExperimentUpdate,
+    ExperimentCommentCreate,
+    ExperimentCommentReplyCreate,
+    ExperimentCommentResolve,
+    ExperimentCommentRead,
 )
 from app.services.experiment_service import (
     DuplicateExperimentCode,
@@ -47,9 +49,7 @@ router = APIRouter()
     summary="List Experiments",
     description="Fetch paginated experiments for current tenant with filtering and sorting.",
 )
-async def list_experiments(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+async def list_experiments(    current_user: User = Depends(get_current_active_user),
     current_tenant: Tenant = Depends(get_current_tenant),
     project_id: Optional[UUID] = Query(None),
     status_param: Optional[ExperimentStatus] = Query(None, alias="status"),
@@ -76,18 +76,32 @@ async def list_experiments(
             page=page, page_size=page_size, sort_by=sort_by, sort_order=sort_order
         )
         items, total = await experiment_service.list_experiments(
-            db, tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination
+            tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination
         )
         total_pages = math.ceil(total / page_size) if total > 0 else 1
 
+        validated_items = []
+        for exp in items:
+            try:
+                validated_items.append(ExperimentRead.model_validate(exp))
+            except Exception as val_err:
+                exp_dict = exp.model_dump() if hasattr(exp, "model_dump") else dict(exp)
+                if not exp_dict.get("project_id"):
+                    exp_dict["project_id"] = current_tenant.id
+                if not exp_dict.get("tenant_id"):
+                    exp_dict["tenant_id"] = current_tenant.id
+                validated_items.append(ExperimentRead.model_validate(exp_dict))
+
         return ExperimentListResponse(
-            items=[ExperimentRead.model_validate(exp) for exp in items],
+            items=validated_items,
             total=total,
             page=page,
             page_size=page_size,
             total_pages=total_pages,
         )
     except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Error in list_experiments endpoint: {e}", exc_info=True)
         return ExperimentListResponse(
             items=[],
             total=0,
@@ -104,9 +118,7 @@ async def list_experiments(
     summary="Search Experiments",
     description="Search experiments by code, title, or description query.",
 )
-async def search_experiments(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+async def search_experiments(    current_user: User = Depends(get_current_active_user),
     current_tenant: Tenant = Depends(get_current_tenant),
     q: str = Query(..., min_length=1, description="Search term"),
     page: int = Query(1, ge=1),
@@ -116,8 +128,7 @@ async def search_experiments(
     try:
         filter_params = ExperimentFilter(search=q)
         pagination = ExperimentPagination(page=page, page_size=page_size)
-        items, total = await experiment_service.list_experiments(
-            db, tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination
+        items, total = await experiment_service.list_experiments(tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination
         )
         total_pages = math.ceil(total / page_size) if total > 0 else 1
 
@@ -146,16 +157,13 @@ async def search_experiments(
     description="Create a new experiment within an active project container.",
 )
 async def create_experiment(
-    *,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    *,    current_user: User = Depends(get_current_active_user),
     current_tenant: Tenant = Depends(get_current_tenant),
     exp_in: ExperimentCreate,
 ) -> Any:
     """Create experiment record."""
     try:
-        exp = await experiment_service.create_experiment(
-            db, obj_in=exp_in, tenant_id=current_tenant.id, current_user=current_user
+        exp = await experiment_service.create_experiment(obj_in=exp_in, tenant_id=current_tenant.id, current_user=current_user
         )
         return ExperimentRead.model_validate(exp)
     except ProjectArchivedOrNotFound as e:
@@ -175,17 +183,14 @@ async def create_experiment(
     description="Fetch experiment details including collaborators and data attachments.",
 )
 async def get_experiment(
-    id: str,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    id: str,    current_user: User = Depends(get_current_active_user),
     current_tenant: Tenant = Depends(get_current_tenant),
 ) -> Any:
     """Fetch experiment detail."""
     try:
         try:
             exp_uuid = UUID(id)
-            exp = await experiment_service.get_experiment(
-                db, experiment_id=exp_uuid, tenant_id=current_tenant.id, include_details=True
+            exp = await experiment_service.get_experiment(experiment_id=exp_uuid, tenant_id=current_tenant.id, include_details=True
             )
             return ExperimentDetail.model_validate(exp)
         except Exception:
@@ -234,9 +239,7 @@ async def get_experiment(
 )
 async def update_experiment(
     id: str,
-    *,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    *,    current_user: User = Depends(get_current_active_user),
     current_tenant: Tenant = Depends(get_current_tenant),
     exp_in: ExperimentUpdate,
 ) -> Any:
@@ -247,8 +250,7 @@ async def update_experiment(
         except ValueError:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Experiment '{id}' not found.")
 
-        exp = await experiment_service.update_experiment(
-            db, experiment_id=exp_uuid, obj_in=exp_in, tenant_id=current_tenant.id, current_user=current_user
+        exp = await experiment_service.update_experiment(experiment_id=exp_uuid, obj_in=exp_in, tenant_id=current_tenant.id, current_user=current_user
         )
         return ExperimentRead.model_validate(exp)
     except ExperimentNotFound as e:
@@ -270,9 +272,7 @@ async def update_experiment(
     description="Soft-delete an experiment while preserving audit trails.",
 )
 async def delete_experiment(
-    id: str,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    id: str,    current_user: User = Depends(get_current_active_user),
     current_tenant: Tenant = Depends(get_current_tenant),
 ) -> None:
     """Soft delete experiment."""
@@ -282,8 +282,7 @@ async def delete_experiment(
         except ValueError:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Experiment '{id}' not found.")
 
-        await experiment_service.delete_experiment(
-            db, experiment_id=exp_uuid, tenant_id=current_tenant.id, current_user=current_user
+        await experiment_service.delete_experiment(experiment_id=exp_uuid, tenant_id=current_tenant.id, current_user=current_user
         )
     except ExperimentNotFound as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
@@ -297,9 +296,7 @@ async def delete_experiment(
     description="Archive an experiment.",
 )
 async def archive_experiment(
-    id: str,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    id: str,    current_user: User = Depends(get_current_active_user),
     current_tenant: Tenant = Depends(get_current_tenant),
 ) -> Any:
     """Archive experiment."""
@@ -309,8 +306,7 @@ async def archive_experiment(
         except ValueError:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Experiment '{id}' not found.")
 
-        exp = await experiment_service.archive_experiment(
-            db, experiment_id=exp_uuid, tenant_id=current_tenant.id, current_user=current_user
+        exp = await experiment_service.archive_experiment(experiment_id=exp_uuid, tenant_id=current_tenant.id, current_user=current_user
         )
         return ExperimentRead.model_validate(exp)
     except ExperimentNotFound as e:
@@ -325,9 +321,7 @@ async def archive_experiment(
     description="Restore an archived experiment back to active status.",
 )
 async def restore_experiment(
-    id: str,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    id: str,    current_user: User = Depends(get_current_active_user),
     current_tenant: Tenant = Depends(get_current_tenant),
 ) -> Any:
     """Restore experiment."""
@@ -337,8 +331,7 @@ async def restore_experiment(
         except ValueError:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Experiment '{id}' not found.")
 
-        exp = await experiment_service.restore_experiment(
-            db, experiment_id=exp_uuid, tenant_id=current_tenant.id, current_user=current_user
+        exp = await experiment_service.restore_experiment(experiment_id=exp_uuid, tenant_id=current_tenant.id, current_user=current_user
         )
         return ExperimentRead.model_validate(exp)
     except ExperimentNotFound as e:
@@ -354,9 +347,7 @@ async def restore_experiment(
 )
 async def add_collaborator(
     id: str,
-    *,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    *,    current_user: User = Depends(get_current_active_user),
     current_tenant: Tenant = Depends(get_current_tenant),
     collab_in: ExperimentCollaboratorCreate,
 ) -> Any:
@@ -367,9 +358,7 @@ async def add_collaborator(
         except ValueError:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Experiment '{id}' not found.")
 
-        collab = await experiment_service.add_collaborator(
-            db,
-            experiment_id=exp_uuid,
+        collab = await experiment_service.add_collaborator(experiment_id=exp_uuid,
             user_id=collab_in.user_id,
             role=collab_in.role,
             tenant_id=current_tenant.id,
@@ -380,3 +369,110 @@ async def add_collaborator(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ExperimentArchivedError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get(
+    "/{id}/comments",
+    response_model=list[ExperimentCommentRead],
+    status_code=status.HTTP_200_OK,
+    summary="List Experiment QA Comments",
+    description="List all QA review comments and threads for an experiment.",
+)
+async def list_experiment_comments(
+    id: str,
+    current_user: User = Depends(get_current_active_user),
+    current_tenant: Tenant = Depends(get_current_tenant),
+) -> Any:
+    try:
+        exp_uuid = UUID(id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Experiment '{id}' not found.")
+
+    comments = await experiment_service.list_comments(
+        experiment_id=exp_uuid,
+        tenant_id=current_tenant.id
+    )
+    return [ExperimentCommentRead.model_validate(c.model_dump()) for c in comments]
+
+
+@router.post(
+    "/{id}/comments",
+    response_model=ExperimentCommentRead,
+    status_code=status.HTTP_201_CREATED,
+    summary="Add QA Review Comment",
+    description="Add a QA review comment on a specific section/step of an experiment.",
+)
+async def add_experiment_comment(
+    id: str,
+    comment_in: ExperimentCommentCreate,
+    current_user: User = Depends(get_current_active_user),
+    current_tenant: Tenant = Depends(get_current_tenant),
+) -> Any:
+    try:
+        exp_uuid = UUID(id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Experiment '{id}' not found.")
+
+    comment = await experiment_service.add_comment(
+        experiment_id=exp_uuid,
+        tenant_id=current_tenant.id,
+        current_user=current_user,
+        comment_in=comment_in,
+    )
+    return ExperimentCommentRead.model_validate(comment.model_dump())
+
+
+@router.post(
+    "/{id}/comments/{comment_id}/reply",
+    response_model=ExperimentCommentRead,
+    status_code=status.HTTP_201_CREATED,
+    summary="Reply to QA Review Comment",
+    description="Reply to an existing QA comment thread.",
+)
+async def reply_experiment_comment(
+    id: str,
+    comment_id: str,
+    reply_in: ExperimentCommentReplyCreate,
+    current_user: User = Depends(get_current_active_user),
+    current_tenant: Tenant = Depends(get_current_tenant),
+) -> Any:
+    try:
+        c_uuid = UUID(comment_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invalid comment identifier.")
+
+    comment = await experiment_service.reply_comment(
+        comment_id=c_uuid,
+        tenant_id=current_tenant.id,
+        current_user=current_user,
+        reply_in=reply_in,
+    )
+    return ExperimentCommentRead.model_validate(comment.model_dump())
+
+
+@router.patch(
+    "/{id}/comments/{comment_id}/resolve",
+    response_model=ExperimentCommentRead,
+    status_code=status.HTTP_200_OK,
+    summary="Resolve QA Comment Thread",
+    description="Mark a QA comment thread as resolved or reopen it.",
+)
+async def resolve_experiment_comment(
+    id: str,
+    comment_id: str,
+    resolve_in: ExperimentCommentResolve,
+    current_user: User = Depends(get_current_active_user),
+    current_tenant: Tenant = Depends(get_current_tenant),
+) -> Any:
+    try:
+        c_uuid = UUID(comment_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invalid comment identifier.")
+
+    comment = await experiment_service.resolve_comment(
+        comment_id=c_uuid,
+        tenant_id=current_tenant.id,
+        current_user=current_user,
+        resolve_in=resolve_in,
+    )
+    return ExperimentCommentRead.model_validate(comment.model_dump())

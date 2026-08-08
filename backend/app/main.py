@@ -13,13 +13,14 @@ from app.models.identity import (
 from app.models.rbac import Role, Permission, RolePermission
 
 from app.models.project import Project, ProjectCollaborator, ProjectAttachment
-from app.models.experiment import Experiment, ExperimentCollaborator, ExperimentAttachment
+from app.models.experiment import Experiment, ExperimentCollaborator, ExperimentAttachment, ExperimentQAComment
 from app.models.sample import Sample, SampleType, SampleStorageLocation, SampleChainOfCustody, SampleAttachment, SampleAliquot
 from app.models.inventory import InventoryItem, InventoryCategory, InventorySupplier, InventoryLocation, InventoryBatch, InventoryTransaction
 from app.models.instrument import Instrument, InstrumentType, InstrumentCalibration, InstrumentMaintenance, InstrumentReservation, InstrumentUsage, InstrumentAttachment
 from app.models.sequence import Sequence, SequenceVersion, SequenceAnnotation, SequenceAttachment, SequenceAnalysisResult
 from app.models.notebook import NotebookEntry, NotebookEntryVersion, NotebookAttachment, NotebookComment, NotebookTag
 from app.models.protocol import Protocol, ProtocolVersion, ProtocolStep, ProtocolAttachment, ProtocolApproval
+from app.models.notification import Notification
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -35,13 +36,14 @@ async def lifespan(app: FastAPI):
             LoginHistory, PasswordHistory,
             Role, Permission, RolePermission,
             Project, ProjectCollaborator, ProjectAttachment,
-            Experiment, ExperimentCollaborator, ExperimentAttachment,
+            Experiment, ExperimentCollaborator, ExperimentAttachment, ExperimentQAComment,
             Sample, SampleType, SampleStorageLocation, SampleChainOfCustody, SampleAttachment, SampleAliquot,
             InventoryItem, InventoryCategory, InventorySupplier, InventoryLocation, InventoryBatch, InventoryTransaction,
             Instrument, InstrumentType, InstrumentCalibration, InstrumentMaintenance, InstrumentReservation, InstrumentUsage, InstrumentAttachment,
             Sequence, SequenceVersion, SequenceAnnotation, SequenceAttachment, SequenceAnalysisResult,
             NotebookEntry, NotebookEntryVersion, NotebookAttachment, NotebookComment, NotebookTag,
-            Protocol, ProtocolVersion, ProtocolStep, ProtocolAttachment, ProtocolApproval
+            Protocol, ProtocolVersion, ProtocolStep, ProtocolAttachment, ProtocolApproval,
+            Notification
         ]
     )
 
@@ -51,11 +53,12 @@ async def lifespan(app: FastAPI):
         from app.services.identity.password_service import password_service
         default_users_data = [
             {"email": "admin@eln.com", "username": "admin", "first": "System", "last": "Admin", "role": "Admin", "dept": "System Administration"},
+            {"email": "ashwin.kumar@eln.com", "username": "ashwink", "first": "Dr. Ashwin", "last": "Kumar", "role": "PI", "dept": "Molecular Biology"},
             {"email": "sarah.johnson@eln.com", "username": "sarahj", "first": "Dr. Sarah", "last": "Johnson", "role": "Researcher", "dept": "Gene Editing Discovery"},
             {"email": "raj.patel@eln.com", "username": "rajp", "first": "Raj", "last": "Patel", "role": "Bioinformatician", "dept": "Bioinformatics & RAG"},
-            {"email": "saikiran@eln.com", "username": "saikiran", "first": "Sai", "last": "Kiran", "role": "Admin", "dept": "Infrastructure & DB"},
             {"email": "ananya.sharma@eln.com", "username": "ananyas", "first": "Ananya", "last": "Sharma", "role": "QA", "dept": "Quality Assurance & Audit"},
-            {"email": "ashwin.kumar@eln.com", "username": "ashwink", "first": "Dr. Ashwin", "last": "Kumar", "role": "PI", "dept": "Molecular Biology"},
+            {"email": "viewer@eln.com", "username": "viewer", "first": "Alex", "last": "Taylor", "role": "Viewer", "dept": "External Review & Audit"},
+            {"email": "saikiran@eln.com", "username": "saikiran", "first": "Sai", "last": "Kiran", "role": "Admin", "dept": "Infrastructure & DB"},
         ]
 
         tenant = await Tenant.find_one({"code": "DEFAULT"})
@@ -115,13 +118,20 @@ from fastapi.middleware.cors import CORSMiddleware
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
+
 
 @app.get("/health")
 async def health_check():

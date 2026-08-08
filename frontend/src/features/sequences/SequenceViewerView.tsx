@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 interface SequenceViewerViewProps {
-  sequence: SequenceRecord;
+  sequence?: SequenceRecord;
   onSelectView: (view: ViewMode) => void;
 }
 
@@ -14,7 +14,7 @@ export const SequenceViewerView: React.FC<SequenceViewerViewProps> = ({
   sequence,
   onSelectView
 }) => {
-  const [selectedSeqId, setSelectedSeqId] = useState<string>(sequence.id);
+  const [selectedSeqId, setSelectedSeqId] = useState<string>(sequence?.id || 'SEQ-9902');
   const [blastRunning, setBlastRunning] = useState(false);
   const [blastResult, setBlastResult] = useState<string | null>(null);
   const [showComplement, setShowComplement] = useState(false);
@@ -23,7 +23,7 @@ export const SequenceViewerView: React.FC<SequenceViewerViewProps> = ({
 
   // Pre-loaded sequence records for switching in Section 7
   const sequences: SequenceRecord[] = [
-    sequence,
+    ...(sequence ? [sequence] : []),
     {
       id: 'SEQ-9902',
       name: 'pSpCas9(BB)-2A-PFP Vector Plasmid',

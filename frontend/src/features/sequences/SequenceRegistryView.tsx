@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { ViewMode } from '../../types';
 import { Search, Plus, ArrowUpRight, Loader2, AlertCircle } from 'lucide-react';
 import { useSequences, useCreateSequence } from '../../hooks/useSequences';
 import { useAuth } from '../../providers/AuthProvider';
+import { isStrictlyViewer } from '../../utils/permissions';
 
 interface SequenceRegistryViewProps {
   onSelectSequence: (id: string) => void;
@@ -14,6 +15,7 @@ export const SequenceRegistryView: React.FC<SequenceRegistryViewProps> = ({
   onSelectView
 }) => {
   const { user } = useAuth();
+  const isViewer = isStrictlyViewer(user);
   const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(1);
   const pageSize = 20;
@@ -29,6 +31,19 @@ export const SequenceRegistryView: React.FC<SequenceRegistryViewProps> = ({
   const [code, setCode] = useState(`SEQ-${Math.floor(1000 + Math.random() * 9000)}`);
   const [seqType, setSeqType] = useState('DNA');
   const [seqData, setSeqData] = useState('');
+
+  // Listen for barcode scans
+  useEffect(() => {
+    const handleScan = (e: Event) => {
+      const customEvent = e as CustomEvent<string>;
+      const code = customEvent.detail;
+      if (code.startsWith('SEQ-')) {
+        setSearchQuery(code); // Instantly auto-fill search bar to highlight the scanned item
+      }
+    };
+    window.addEventListener('barcode-scanned', handleScan);
+    return () => window.removeEventListener('barcode-scanned', handleScan);
+  }, []);
 
   const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,13 +83,15 @@ export const SequenceRegistryView: React.FC<SequenceRegistryViewProps> = ({
           </div>
         </div>
 
-        <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold px-3.5 py-1.5 rounded-lg shadow-sm transition-colors cursor-pointer"
-        >
-          <Plus className="w-4 h-4" />
-          <span>New Sequence</span>
-        </button>
+        {!isViewer && (
+          <button
+            onClick={() => setShowModal(true)}
+            className="flex items-center gap-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold px-3.5 py-1.5 rounded-lg shadow-sm transition-colors cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>New Sequence</span>
+          </button>
+        )}
       </div>
 
       {isLoading ? (

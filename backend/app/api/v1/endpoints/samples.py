@@ -3,9 +3,7 @@ from typing import Any, List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_db
 from app.core.security.authorization import (
     get_current_active_user,
     get_current_tenant,
@@ -44,9 +42,7 @@ router = APIRouter()
     summary="List Samples",
     description="Fetch paginated sample records for current tenant with filtering and sorting.",
 )
-async def list_samples(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+async def list_samples(    current_user: User = Depends(get_current_active_user),
     current_tenant: Tenant = Depends(get_current_tenant),
     experiment_id: Optional[UUID] = Query(None),
     sample_type_id: Optional[UUID] = Query(None),
@@ -72,8 +68,7 @@ async def list_samples(
         pagination = SamplePagination(
             page=page, page_size=page_size, sort_by=sort_by, sort_order=sort_order
         )
-        items, total = await sample_service.list_samples(
-            db, tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination
+        items, total = await sample_service.list_samples(tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination
         )
         total_pages = math.ceil(total / page_size) if total > 0 else 1
 
@@ -101,9 +96,7 @@ async def list_samples(
     summary="Search Samples",
     description="Search samples by code, barcode, or name query.",
 )
-async def search_samples(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+async def search_samples(    current_user: User = Depends(get_current_active_user),
     current_tenant: Tenant = Depends(get_current_tenant),
     q: str = Query(..., min_length=1, description="Search keyword"),
     page: int = Query(1, ge=1),
@@ -113,8 +106,7 @@ async def search_samples(
     try:
         filter_params = SampleFilter(search=q)
         pagination = SamplePagination(page=page, page_size=page_size)
-        items, total = await sample_service.list_samples(
-            db, tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination
+        items, total = await sample_service.list_samples(tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination
         )
         total_pages = math.ceil(total / page_size) if total > 0 else 1
 
@@ -143,16 +135,13 @@ async def search_samples(
     description="Register a new biological or chemical sample.",
 )
 async def create_sample(
-    *,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    *,    current_user: User = Depends(get_current_active_user),
     current_tenant: Tenant = Depends(get_current_tenant),
     sample_in: SampleCreate,
 ) -> Any:
     """Register sample record."""
     try:
-        sample = await sample_service.create_sample(
-            db, obj_in=sample_in, tenant_id=current_tenant.id, current_user=current_user
+        sample = await sample_service.create_sample(obj_in=sample_in, tenant_id=current_tenant.id, current_user=current_user
         )
         return SampleRead.model_validate(sample)
     except ExperimentArchivedOrNotFound as e:
@@ -173,15 +162,12 @@ async def create_sample(
     description="Fetch sample detail including storage location, type, and chain of custody audit history.",
 )
 async def get_sample(
-    id: UUID,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    id: UUID,    current_user: User = Depends(get_current_active_user),
     current_tenant: Tenant = Depends(get_current_tenant),
 ) -> Any:
     """Fetch sample detail."""
     try:
-        sample = await sample_service.get_sample(
-            db, sample_id=id, tenant_id=current_tenant.id, include_details=True
+        sample = await sample_service.get_sample(sample_id=id, tenant_id=current_tenant.id, include_details=True
         )
         return SampleDetail.model_validate(sample)
     except SampleNotFound as e:
@@ -197,16 +183,13 @@ async def get_sample(
 )
 async def update_sample(
     id: UUID,
-    *,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    *,    current_user: User = Depends(get_current_active_user),
     current_tenant: Tenant = Depends(get_current_tenant),
     sample_in: SampleUpdate,
 ) -> Any:
     """Update sample."""
     try:
-        sample = await sample_service.update_sample(
-            db, sample_id=id, obj_in=sample_in, tenant_id=current_tenant.id, current_user=current_user
+        sample = await sample_service.update_sample(sample_id=id, obj_in=sample_in, tenant_id=current_tenant.id, current_user=current_user
         )
         return SampleRead.model_validate(sample)
     except SampleNotFound as e:
@@ -224,15 +207,12 @@ async def update_sample(
     description="Soft-delete a sample while preserving chain of custody audit trail.",
 )
 async def delete_sample(
-    id: UUID,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    id: UUID,    current_user: User = Depends(get_current_active_user),
     current_tenant: Tenant = Depends(get_current_tenant),
 ) -> None:
     """Soft delete sample."""
     try:
-        await sample_service.delete_sample(
-            db, sample_id=id, tenant_id=current_tenant.id, current_user=current_user
+        await sample_service.delete_sample(sample_id=id, tenant_id=current_tenant.id, current_user=current_user
         )
     except SampleNotFound as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
@@ -246,15 +226,12 @@ async def delete_sample(
     description="Fetch immutable chain-of-custody audit records for a sample.",
 )
 async def get_chain_of_custody(
-    id: UUID,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    id: UUID,    current_user: User = Depends(get_current_active_user),
     current_tenant: Tenant = Depends(get_current_tenant),
 ) -> Any:
     """Fetch chain of custody history."""
     try:
-        coc_list = await sample_service.get_chain_of_custody(
-            db, sample_id=id, tenant_id=current_tenant.id
+        coc_list = await sample_service.get_chain_of_custody(sample_id=id, tenant_id=current_tenant.id
         )
         return [ChainOfCustodyRead.model_validate(c) for c in coc_list]
     except SampleNotFound as e:

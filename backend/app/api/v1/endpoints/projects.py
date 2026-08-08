@@ -3,9 +3,7 @@ from typing import Any, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_db
 from app.core.security.authorization import (
     get_current_active_user,
     get_current_tenant,
@@ -44,9 +42,7 @@ router = APIRouter()
     summary="List Projects",
     description="Fetch paginated projects for current tenant with filtering and sorting.",
 )
-async def list_projects(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+async def list_projects(    current_user: User = Depends(get_current_active_user),
     current_tenant: Tenant = Depends(get_current_tenant),
     status_param: Optional[ProjectStatus] = Query(None, alias="status"),
     priority: Optional[str] = Query(None),
@@ -70,8 +66,8 @@ async def list_projects(
         pagination = ProjectPagination(
             page=page, page_size=page_size, sort_by=sort_by, sort_order=sort_order
         )
-        items, total = await project_service.list_projects(
-            db, tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination
+        items, total = await project_service.list_projects(tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination,
+            current_user=current_user
         )
         total_pages = math.ceil(total / page_size) if total > 0 else 1
 
@@ -101,9 +97,7 @@ async def list_projects(
     summary="Search Projects",
     description="Search projects by code, name, or description query.",
 )
-async def search_projects(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+async def search_projects(    current_user: User = Depends(get_current_active_user),
     current_tenant: Tenant = Depends(get_current_tenant),
     q: str = Query(..., min_length=1, description="Search term"),
     page: int = Query(1, ge=1),
@@ -113,8 +107,8 @@ async def search_projects(
     try:
         filter_params = ProjectFilter(search=q)
         pagination = ProjectPagination(page=page, page_size=page_size)
-        items, total = await project_service.list_projects(
-            db, tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination
+        items, total = await project_service.list_projects(tenant_id=current_tenant.id, filter_params=filter_params, pagination=pagination,
+            current_user=current_user
         )
         total_pages = math.ceil(total / page_size) if total > 0 else 1
 
@@ -143,16 +137,13 @@ async def search_projects(
     description="Create a new research project within tenant scope.",
 )
 async def create_project(
-    *,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    *,    current_user: User = Depends(get_current_active_user),
     current_tenant: Tenant = Depends(get_current_tenant),
     project_in: ProjectCreate,
 ) -> Any:
     """Create project record."""
     try:
-        project = await project_service.create_project(
-            db, obj_in=project_in, tenant_id=current_tenant.id, current_user=current_user
+        project = await project_service.create_project(obj_in=project_in, tenant_id=current_tenant.id, current_user=current_user
         )
         return ProjectRead.model_validate(project)
     except DuplicateProjectCode as e:
@@ -171,15 +162,12 @@ async def create_project(
     description="Fetch project by ID including collaborators and attachments.",
 )
 async def get_project(
-    id: UUID,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    id: UUID,    current_user: User = Depends(get_current_active_user),
     current_tenant: Tenant = Depends(get_current_tenant),
 ) -> Any:
     """Fetch project detail."""
     try:
-        project = await project_service.get_project(
-            db, project_id=id, tenant_id=current_tenant.id, include_details=True
+        project = await project_service.get_project(project_id=id, tenant_id=current_tenant.id, include_details=True
         )
         return ProjectDetail.model_validate(project)
     except ProjectNotFound as e:
@@ -195,16 +183,13 @@ async def get_project(
 )
 async def update_project(
     id: UUID,
-    *,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    *,    current_user: User = Depends(get_current_active_user),
     current_tenant: Tenant = Depends(get_current_tenant),
     project_in: ProjectUpdate,
 ) -> Any:
     """Update project."""
     try:
-        project = await project_service.update_project(
-            db, project_id=id, obj_in=project_in, tenant_id=current_tenant.id, current_user=current_user
+        project = await project_service.update_project(project_id=id, obj_in=project_in, tenant_id=current_tenant.id, current_user=current_user
         )
         return ProjectRead.model_validate(project)
     except ProjectNotFound as e:
@@ -222,15 +207,12 @@ async def update_project(
     description="Soft-delete a project while preserving audit trail.",
 )
 async def delete_project(
-    id: UUID,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    id: UUID,    current_user: User = Depends(get_current_active_user),
     current_tenant: Tenant = Depends(get_current_tenant),
 ) -> None:
     """Soft delete project."""
     try:
-        await project_service.delete_project(
-            db, project_id=id, tenant_id=current_tenant.id, current_user=current_user
+        await project_service.delete_project(project_id=id, tenant_id=current_tenant.id, current_user=current_user
         )
     except ProjectNotFound as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
@@ -244,15 +226,12 @@ async def delete_project(
     description="Archive a project.",
 )
 async def archive_project(
-    id: UUID,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    id: UUID,    current_user: User = Depends(get_current_active_user),
     current_tenant: Tenant = Depends(get_current_tenant),
 ) -> Any:
     """Archive project."""
     try:
-        project = await project_service.archive_project(
-            db, project_id=id, tenant_id=current_tenant.id, current_user=current_user
+        project = await project_service.archive_project(project_id=id, tenant_id=current_tenant.id, current_user=current_user
         )
         return ProjectRead.model_validate(project)
     except ProjectNotFound as e:
@@ -267,15 +246,12 @@ async def archive_project(
     description="Restore an archived project back to active status.",
 )
 async def restore_project(
-    id: UUID,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    id: UUID,    current_user: User = Depends(get_current_active_user),
     current_tenant: Tenant = Depends(get_current_tenant),
 ) -> Any:
     """Restore project."""
     try:
-        project = await project_service.restore_project(
-            db, project_id=id, tenant_id=current_tenant.id, current_user=current_user
+        project = await project_service.restore_project(project_id=id, tenant_id=current_tenant.id, current_user=current_user
         )
         return ProjectRead.model_validate(project)
     except ProjectNotFound as e:
@@ -291,17 +267,13 @@ async def restore_project(
 )
 async def add_collaborator(
     id: UUID,
-    *,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    *,    current_user: User = Depends(get_current_active_user),
     current_tenant: Tenant = Depends(get_current_tenant),
     collab_in: ProjectCollaboratorCreate,
 ) -> Any:
     """Add project collaborator."""
     try:
-        collab = await project_service.add_collaborator(
-            db,
-            project_id=id,
+        collab = await project_service.add_collaborator(project_id=id,
             user_id=collab_in.user_id,
             role=collab_in.role,
             tenant_id=current_tenant.id,

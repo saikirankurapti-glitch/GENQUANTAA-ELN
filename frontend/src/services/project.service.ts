@@ -51,5 +51,13 @@ export const projectService = {
   unarchiveProject: async (id: string): Promise<Project> => {
     const response = await apiClient.post<Project>(`/projects/${id}/restore`);
     return response.data;
+  },
+
+  addCollaborator: async (projectId: string, userId: string, role: string): Promise<any> => {
+    const response = await apiClient.post(`/projects/${projectId}/collaborators`, {
+      user_id: userId,
+      role: role
+    });
+    return response.data;
   }
 };

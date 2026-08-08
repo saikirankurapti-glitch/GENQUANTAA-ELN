@@ -11,7 +11,7 @@ from app.models.rbac import Role, Permission, RolePermission
 from app.models.identity import User, UserRole, RefreshToken, UserSession
 from app.models.organization import Organization, Department, Team, OrganizationUser
 from app.models.project import Project, ProjectCollaborator, ProjectAttachment
-from app.models.experiment import Experiment, ExperimentCollaborator, ExperimentAttachment
+from app.models.experiment import Experiment, ExperimentCollaborator, ExperimentAttachment, ExperimentQAComment
 from app.models.notebook import NotebookEntry, NotebookEntryVersion, NotebookAttachment, NotebookComment, NotebookTag
 from app.models.sample import Sample, SampleType, SampleStorageLocation, SampleChainOfCustody, SampleAttachment, SampleAliquot
 from app.models.protocol import Protocol, ProtocolVersion, ProtocolStep, ProtocolAttachment, ProtocolApproval

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import type { ViewMode } from '../../types';
 import { 
   ArrowLeft, QrCode, MapPin, History, Copy, Download, 
-  Dna, FlaskConical, ChevronDown, Check, Tag, ShieldCheck, Box, Loader2, AlertCircle
+  Dna, FlaskConical, ChevronDown, Check, Tag, ShieldCheck, Box, Loader2, AlertCircle, User2
 } from 'lucide-react';
 import { useSample, useUpdateSample } from '../../hooks/useSamples';
 
@@ -27,41 +27,49 @@ export const SampleDetailView: React.FC<SampleDetailViewProps> = ({
 
   const slots = Array.from({ length: 81 }, (_, i) => i + 1);
 
+  if (isLoading) {
+    return (
+      <div className="flex justify-center p-12 h-full items-center">
+        <Loader2 className="w-8 h-8 animate-spin text-teal-600" />
+      </div>
+    );
+  }
+
+  if (error || !sample || !(sample as any).id) {
+    return (
+      <div className="flex flex-col items-center justify-center p-12 h-full text-rose-500 gap-3">
+        <AlertCircle className="w-8 h-8" />
+        <span className="font-semibold text-sm">Failed to load sample details.</span>
+        <button onClick={() => onSelectView('samples')} className="text-xs text-slate-500 hover:underline cursor-pointer">
+          ← Back to Sample Registry
+        </button>
+      </div>
+    );
+  }
+
+  const sampleAny = sample as any;
+  const meta: Record<string, any> = (sampleAny.metadata_json && typeof sampleAny.metadata_json === 'object') ? sampleAny.metadata_json : {};
+  const chainOfCustody: any[] = Array.isArray(sampleAny.chain_of_custody) 
+    ? sampleAny.chain_of_custody 
+    : Array.isArray(meta.chainOfCustody) 
+      ? meta.chainOfCustody 
+      : [];
+
+  const locationString = meta.locationString || 'Unassigned';
+
   const handleCopyBarcode = () => {
-    if (!sample) return;
+    if (!sample.barcode) return;
     navigator.clipboard.writeText(sample.barcode);
     setCopiedBarcode(true);
     setTimeout(() => setCopiedBarcode(false), 2000);
   };
 
   const handleStatusChange = async (newStatus: string) => {
-    if (!sample) return;
     await updateSample.mutateAsync({
       id: sample.id,
       data: { status: newStatus }
     });
   };
-
-  if (isLoading) {
-    return (
-      <div className="flex justify-center p-12 h-full items-center">
-         <Loader2 className="w-8 h-8 animate-spin text-teal-600" />
-      </div>
-    );
-  }
-
-  if (error || !sample) {
-    return (
-      <div className="flex flex-col items-center justify-center p-12 h-full text-rose-500">
-         <AlertCircle className="w-8 h-8 mb-4" />
-         <span className="font-semibold">Failed to load sample details.</span>
-      </div>
-    );
-  }
-
-  // Derive from metadata_json or backend schemas
-  const chainOfCustody = sample.chain_of_custody || sample.metadata_json?.chainOfCustody || [];
-  const locationString = sample.metadata_json?.locationString || 'Unassigned';
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
@@ -78,7 +86,7 @@ export const SampleDetailView: React.FC<SampleDetailViewProps> = ({
             <div className="flex items-center gap-2 text-xs text-slate-500">
               <span className="font-mono">{sample.sample_code}</span>
               <span>/</span>
-              <span className="bg-slate-100 text-slate-600 font-semibold px-2 py-0.5 rounded">{sample.metadata_json?.typeCode || 'UNKNOWN'}</span>
+              <span className="bg-slate-100 text-slate-600 font-semibold px-2 py-0.5 rounded">{meta.typeCode || 'UNKNOWN'}</span>
             </div>
             <h2 className="text-xl font-bold text-slate-800 tracking-tight">{sample.sample_name}</h2>
           </div>
@@ -125,26 +133,30 @@ export const SampleDetailView: React.FC<SampleDetailViewProps> = ({
               <div className="space-y-1">
                 <span className="text-slate-400 text-xs font-medium">Barcode (Global ID)</span>
                 <div className="flex items-center gap-2">
-                  <span className="font-mono font-bold text-slate-800">{sample.barcode}</span>
-                  <button onClick={handleCopyBarcode} className="text-slate-400 hover:text-slate-600 cursor-pointer">
-                    {copiedBarcode ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                  </button>
+                  <span className="font-mono font-bold text-slate-800">{sample.barcode || '—'}</span>
+                  {sample.barcode && (
+                    <button onClick={handleCopyBarcode} className="text-slate-400 hover:text-slate-600 cursor-pointer">
+                      {copiedBarcode ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                    </button>
+                  )}
                 </div>
               </div>
 
               <div className="space-y-1">
-                <span className="text-slate-400 text-xs font-medium">Project Source</span>
-                <p className="font-semibold text-blue-600 cursor-pointer hover:underline">{sample.experiment_id}</p>
+                <span className="text-slate-400 text-xs font-medium font-mono">Experiment / Project</span>
+                <p className="font-semibold text-blue-600 cursor-pointer hover:underline truncate">{sample.experiment_id || '—'}</p>
               </div>
 
               <div className="space-y-1">
                 <span className="text-slate-400 text-xs font-medium">Available Quantity</span>
-                <p className="font-bold text-slate-800 text-lg">{sample.quantity} {sample.unit}</p>
+                <p className="font-bold text-slate-800 text-lg">{sample.quantity ?? 0} {sample.unit || 'units'}</p>
               </div>
 
               <div className="space-y-1">
                 <span className="text-slate-400 text-xs font-medium">Date Registered</span>
-                <p className="font-semibold text-slate-800">{new Date(sample.created_at).toLocaleDateString()}</p>
+                <p className="font-semibold text-slate-800">
+                  {sample.created_at ? new Date(sample.created_at).toLocaleDateString() : '—'}
+                </p>
               </div>
             </div>
           </div>
@@ -161,10 +173,10 @@ export const SampleDetailView: React.FC<SampleDetailViewProps> = ({
                   <div className="flex items-center justify-center w-4 h-4 rounded-full border-2 border-white bg-blue-500 shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2"></div>
                   <div className="w-[calc(100%-2rem)] md:w-[calc(50%-1.5rem)] bg-slate-50 p-3 rounded-lg border border-slate-200 shadow-sm text-xs">
                     <div className="flex justify-between font-bold text-slate-800 mb-1">
-                      <span>{audit.action}</span>
-                      <span className="text-slate-400 text-[10px]">{audit.performed_at}</span>
+                      <span>{audit.action || 'Custody Event'}</span>
+                      <span className="text-slate-400 text-[10px]">{audit.performed_at || 'Recently'}</span>
                     </div>
-                    <p className="text-slate-600">{audit.custodian_id} - {audit.remarks}</p>
+                    <p className="text-slate-600">{audit.custodian_id || 'Researcher'} - {audit.remarks || 'No notes'}</p>
                   </div>
                 </div>
               ))}
@@ -191,7 +203,7 @@ export const SampleDetailView: React.FC<SampleDetailViewProps> = ({
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500 font-medium">Temperature</span>
-                  <span className="font-bold text-blue-600">{sample.storage_temperature}</span>
+                  <span className="font-bold text-blue-600">{sample.storage_temperature || '—'}</span>
                 </div>
               </div>
 

@@ -1,11 +1,7 @@
 import logging
 from datetime import datetime, timezone
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Any
 from uuid import UUID
-
-from sqlalchemy import func, or_, select, and_
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.models.project import Project, ProjectCollaborator, ProjectAttachment
 from app.schemas.project import ProjectCreate, ProjectFilter, ProjectPagination, ProjectUpdate
@@ -19,7 +15,6 @@ class ProjectRepository:
 
     async def create(
         self,
-        db: AsyncSession,
         *,
         obj_in: ProjectCreate,
         tenant_id: UUID,
@@ -41,48 +36,36 @@ class ProjectRepository:
             start_date=obj_in.start_date,
             target_end_date=obj_in.target_end_date,
             metadata_json=obj_in.metadata_json,
-            created_by=current_user_id,
-            updated_by=current_user_id,
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
         )
-        db.add(project)
-        await db.commit()
-        await db.refresh(project)
+        await project.insert()
         return project
 
     async def get_by_id(
-        self, db: AsyncSession, *, id: UUID, tenant_id: UUID, include_details: bool = False
+        self, *, id: UUID, tenant_id: UUID, include_details: bool = False
     ) -> Optional[Project]:
         """Fetch Project by ID within tenant scope."""
-        stmt = select(Project).where(
+        project = await Project.find_one(
             Project.id == id,
             Project.tenant_id == tenant_id,
             Project.is_deleted == False
         )
-        if include_details:
-            stmt = stmt.options(
-                selectinload(Project.collaborators),
-                selectinload(Project.attachments),
-                selectinload(Project.organization),
-                selectinload(Project.owner),
-            )
-        res = await db.execute(stmt)
-        return res.scalar_one_or_none()
+        return project
 
     async def get_by_code(
-        self, db: AsyncSession, *, project_code: str, tenant_id: UUID
+        self, *, project_code: str, tenant_id: UUID
     ) -> Optional[Project]:
         """Fetch Project by unique project_code within tenant scope."""
-        stmt = select(Project).where(
+        project = await Project.find_one(
             Project.project_code == project_code.upper(),
             Project.tenant_id == tenant_id,
             Project.is_deleted == False
         )
-        res = await db.execute(stmt)
-        return res.scalar_one_or_none()
+        return project
 
     async def update(
         self,
-        db: AsyncSession,
         *,
         db_obj: Project,
         obj_in: ProjectUpdate,
@@ -93,153 +76,169 @@ class ProjectRepository:
         for field, value in update_data.items():
             setattr(db_obj, field, value)
 
-        db_obj.updated_by = current_user_id
         db_obj.updated_at = datetime.now(timezone.utc)
-        db.add(db_obj)
-        await db.commit()
-        await db.refresh(db_obj)
+        await db_obj.save()
         return db_obj
 
     async def archive(
-        self, db: AsyncSession, *, project_id: UUID, tenant_id: UUID, current_user_id: Optional[UUID] = None
+        self, *, project_id: UUID, tenant_id: UUID, current_user_id: Optional[UUID] = None
     ) -> Optional[Project]:
         """Archive a Project."""
-        project = await self.get_by_id(db, id=project_id, tenant_id=tenant_id)
+        project = await self.get_by_id(id=project_id, tenant_id=tenant_id)
         if not project:
             return None
 
         project.is_archived = True
         project.archived_at = datetime.now(timezone.utc)
         project.status = ProjectStatus.ARCHIVED
-        project.updated_by = current_user_id
-        db.add(project)
-        await db.commit()
-        await db.refresh(project)
+        project.updated_at = datetime.now(timezone.utc)
+        await project.save()
         return project
 
     async def restore(
-        self, db: AsyncSession, *, project_id: UUID, tenant_id: UUID, current_user_id: Optional[UUID] = None
+        self, *, project_id: UUID, tenant_id: UUID, current_user_id: Optional[UUID] = None
     ) -> Optional[Project]:
         """Restore an archived Project."""
-        project = await self.get_by_id(db, id=project_id, tenant_id=tenant_id)
+        project = await self.get_by_id(id=project_id, tenant_id=tenant_id)
         if not project:
             return None
 
         project.is_archived = False
         project.archived_at = None
         project.status = ProjectStatus.ACTIVE
-        project.updated_by = current_user_id
-        db.add(project)
-        await db.commit()
-        await db.refresh(project)
+        project.updated_at = datetime.now(timezone.utc)
+        await project.save()
         return project
 
     async def soft_delete(
-        self, db: AsyncSession, *, id: UUID, tenant_id: UUID, current_user_id: Optional[UUID] = None
+        self, *, id: UUID, tenant_id: UUID, current_user_id: Optional[UUID] = None
     ) -> bool:
         """Soft-delete Project while preserving audit history."""
-        project = await self.get_by_id(db, id=id, tenant_id=tenant_id)
+        project = await self.get_by_id(id=id, tenant_id=tenant_id)
         if not project:
             return False
 
         project.is_deleted = True
-        project.deleted_at = datetime.now(timezone.utc)
-        project.deleted_by = current_user_id
-        db.add(project)
-        await db.commit()
+        project.updated_at = datetime.now(timezone.utc)
+        await project.save()
         return True
 
     async def list_projects(
         self,
-        db: AsyncSession,
         *,
         tenant_id: UUID,
         filter_params: ProjectFilter,
         pagination: ProjectPagination
-    ) -> Tuple[List[Project], int]:
+    ) -> Tuple[List[dict], int]:
         """List and search Projects with pagination and filtering."""
-        query = select(Project).where(
+        query = Project.find(
             Project.tenant_id == tenant_id,
             Project.is_deleted == False
         )
 
         # Filters
         if filter_params.status:
-            query = query.where(Project.status == filter_params.status)
+            query = query.find(Project.status == filter_params.status)
         if filter_params.priority:
-            query = query.where(Project.priority == filter_params.priority)
+            query = query.find(Project.priority == filter_params.priority)
         if filter_params.owner_id:
-            query = query.where(Project.owner_id == filter_params.owner_id)
+            query = query.find(Project.owner_id == filter_params.owner_id)
         if filter_params.is_archived is not None:
-            query = query.where(Project.is_archived == filter_params.is_archived)
+            query = query.find(Project.is_archived == filter_params.is_archived)
         if filter_params.search:
-            pattern = f"%{filter_params.search}%"
-            query = query.where(
-                or_(
-                    Project.project_code.ilike(pattern),
-                    Project.name.ilike(pattern),
-                    Project.description.ilike(pattern),
-                )
-            )
+            query = query.find({"$or": [
+                {"project_code": {"$regex": filter_params.search, "$options": "i"}},
+                {"name": {"$regex": filter_params.search, "$options": "i"}},
+                {"description": {"$regex": filter_params.search, "$options": "i"}},
+            ]})
 
-        # Count total
-        count_stmt = select(func.count()).select_from(query.subquery())
-        count_res = await db.execute(count_stmt)
-        total = count_res.scalar_one() or 0
+        total = await query.count()
+        skip = (pagination.page - 1) * pagination.page_size
+        items = await query.sort(-Project.created_at).skip(skip).limit(pagination.page_size).to_list()
+        
+        mapped_items = []
+        for i in items:
+            mapped_items.append({
+                "id": i.id,
+                "tenant_id": i.tenant_id,
+                "organization_id": i.organization_id,
+                "owner_id": i.owner_id,
+                "name": i.name,
+                "project_code": i.project_code,
+                "description": i.description,
+                "objective": i.objective,
+                "status": i.status.value if hasattr(i.status, 'value') else str(i.status),
+                "priority": i.priority,
+                "tags": i.tags,
+                "visibility": i.visibility,
+                "is_archived": i.is_archived,
+                "start_date": i.start_date,
+                "target_end_date": i.target_end_date,
+                "created_at": i.created_at,
+                "updated_at": i.updated_at,
+            })
 
-        # Sorting & Pagination
-        sort_col = getattr(Project, pagination.sort_by, Project.created_at)
-        if pagination.sort_order.lower() == "desc":
-            query = query.order_by(sort_col.desc())
-        else:
-            query = query.order_by(sort_col.asc())
-
-        offset = (pagination.page - 1) * pagination.page_size
-        query = query.offset(offset).limit(pagination.page_size)
-
-        res = await db.execute(query)
-        items = list(res.scalars().all())
-        return items, total
+        return mapped_items, total
 
     async def list_by_owner(
-        self, db: AsyncSession, *, tenant_id: UUID, owner_id: UUID, pagination: ProjectPagination
-    ) -> Tuple[List[Project], int]:
+        self, *, tenant_id: UUID, owner_id: UUID, pagination: ProjectPagination
+    ) -> Tuple[List[dict], int]:
         """List Projects owned by a specific user."""
         filter_params = ProjectFilter(owner_id=owner_id)
-        return await self.list_projects(db, tenant_id=tenant_id, filter_params=filter_params, pagination=pagination)
+        return await self.list_projects(tenant_id=tenant_id, filter_params=filter_params, pagination=pagination)
 
     async def list_by_collaborator(
-        self, db: AsyncSession, *, tenant_id: UUID, user_id: UUID, pagination: ProjectPagination
-    ) -> Tuple[List[Project], int]:
+        self, *, tenant_id: UUID, user_id: UUID, pagination: ProjectPagination
+    ) -> Tuple[List[dict], int]:
         """List Projects where specified user is an assigned collaborator."""
-        query = (
-            select(Project)
-            .join(ProjectCollaborator, Project.id == ProjectCollaborator.project_id)
-            .where(
-                Project.tenant_id == tenant_id,
-                ProjectCollaborator.user_id == user_id,
-                Project.is_deleted == False,
-            )
+        collaborations = await ProjectCollaborator.find(
+            ProjectCollaborator.user_id == user_id,
+            ProjectCollaborator.tenant_id == tenant_id
+        ).to_list()
+        
+        project_ids = [c.project_id for c in collaborations]
+        if not project_ids:
+            return [], 0
+            
+        query = Project.find(
+            {"_id": {"$in": project_ids}},
+            Project.is_deleted == False
         )
+        total = await query.count()
+        skip = (pagination.page - 1) * pagination.page_size
+        items = await query.sort(-Project.created_at).skip(skip).limit(pagination.page_size).to_list()
+        
+        mapped_items = []
+        for i in items:
+            mapped_items.append({
+                "id": i.id,
+                "tenant_id": i.tenant_id,
+                "organization_id": i.organization_id,
+                "owner_id": i.owner_id,
+                "name": i.name,
+                "project_code": i.project_code,
+                "description": i.description,
+                "objective": i.objective,
+                "status": i.status.value if hasattr(i.status, 'value') else str(i.status),
+                "priority": i.priority,
+                "tags": i.tags,
+                "visibility": i.visibility,
+                "is_archived": i.is_archived,
+                "start_date": i.start_date,
+                "target_end_date": i.target_end_date,
+                "created_at": i.created_at,
+                "updated_at": i.updated_at,
+            })
 
-        count_stmt = select(func.count()).select_from(query.subquery())
-        count_res = await db.execute(count_stmt)
-        total = count_res.scalar_one() or 0
-
-        offset = (pagination.page - 1) * pagination.page_size
-        query = query.order_by(Project.created_at.desc()).offset(offset).limit(pagination.page_size)
-
-        res = await db.execute(query)
-        items = list(res.scalars().all())
-        return items, total
+        return mapped_items, total
 
     async def add_collaborator(
         self,
-        db: AsyncSession,
         *,
         project_id: UUID,
         user_id: UUID,
         role: str = "viewer",
+        tenant_id: UUID,
         added_by: Optional[UUID] = None
     ) -> ProjectCollaborator:
         """Add a collaborator to a project."""
@@ -247,25 +246,20 @@ class ProjectRepository:
             project_id=project_id,
             user_id=user_id,
             role=role,
-            added_by=added_by,
+            tenant_id=tenant_id,
         )
-        db.add(collaborator)
-        await db.commit()
-        await db.refresh(collaborator)
+        await collaborator.insert()
         return collaborator
 
-    async def remove_collaborator(self, db: AsyncSession, *, project_id: UUID, user_id: UUID) -> bool:
+    async def remove_collaborator(self, *, project_id: UUID, user_id: UUID) -> bool:
         """Remove a collaborator from a project."""
-        stmt = select(ProjectCollaborator).where(
+        collab = await ProjectCollaborator.find_one(
             ProjectCollaborator.project_id == project_id,
             ProjectCollaborator.user_id == user_id,
         )
-        res = await db.execute(stmt)
-        collab = res.scalar_one_or_none()
         if not collab:
             return False
-        await db.delete(collab)
-        await db.commit()
+        await collab.delete()
         return True
 
 

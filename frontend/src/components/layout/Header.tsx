@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import type { ViewMode } from '../../types';
 import { useAuth } from '../../providers/AuthProvider';
 import { getUserInitials, getUserRole } from '../../utils/userUtils';
-import { Search, Plus, Bell, Sparkles, Command, Shield } from 'lucide-react';
+import { canUseAICopilot, canCreateExperiment } from '../../utils/permissions';
+import { Search, Plus, Bell, Sparkles, Command, Shield, ScanLine } from 'lucide-react';
+import { BarcodeScanner } from '../BarcodeScanner';
 
 interface HeaderProps {
   currentView: ViewMode;
@@ -21,6 +23,7 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const { user } = useAuth();
   const [searchFocused, setSearchFocused] = useState(false);
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
   const userRole = getUserRole(user);
 
   const getViewTitle = () => {
@@ -48,7 +51,7 @@ export const Header: React.FC<HeaderProps> = ({
   const { title, sub } = getViewTitle();
 
   return (
-    <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between sticky top-0 z-20">
+    <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between sticky top-0 z-20 print:hidden">
       {/* Title & Subtitle */}
       <div>
         <h1 className="text-lg font-bold text-slate-800 tracking-tight">{title}</h1>
@@ -86,24 +89,37 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* AI Copilot Status Pill */}
-        <button 
-          onClick={() => onSelectView('ai-copilot')}
-          className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-50 text-teal-700 border border-teal-200 hover:bg-teal-100 transition-colors text-xs font-medium"
+        {/* AI Copilot Status Pill - Hidden for QA and Viewers */}
+        {canUseAICopilot(user) && (
+          <button 
+            onClick={() => onSelectView('ai-copilot')}
+            className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-50 text-teal-700 border border-teal-200 hover:bg-teal-100 transition-colors text-xs font-medium"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-teal-600 animate-spin" />
+            <span>AI Copilot</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+          </button>
+        )}
+        {/* Camera Scan Button */}
+        <button
+          onClick={() => setIsScannerOpen(true)}
+          className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold px-3 py-2 rounded-lg transition-colors border border-slate-200"
+          title="Scan Barcode / QR Code"
         >
-          <Sparkles className="w-3.5 h-3.5 text-teal-600 animate-spin" />
-          <span>AI Copilot</span>
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+          <ScanLine className="w-4 h-4 text-purple-600" />
+          <span className="hidden lg:inline">Scan</span>
         </button>
 
-        {/* Quick Add Button */}
-        <button
-          onClick={onOpenQuickCreate}
-          className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3.5 py-2 rounded-lg shadow-sm transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          <span>New Entry</span>
-        </button>
+        {/* Quick Add Button - Only for Admin and PI */}
+        {canCreateExperiment(user) && (
+          <button
+            onClick={onOpenQuickCreate}
+            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3.5 py-2 rounded-lg shadow-sm transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            <span>New Entry</span>
+          </button>
+        )}
 
         {/* Notification Bell */}
         <button 
@@ -126,6 +142,28 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Barcode Scanner Modal */}
+      {isScannerOpen && (
+        <BarcodeScanner 
+          onResult={(code) => {
+            setIsScannerOpen(false);
+            
+            // Dispatch a global event so the active view (or the one we switch to) can catch it
+            window.dispatchEvent(new CustomEvent('barcode-scanned', { detail: code }));
+            
+            // Example routing logic: if it's a SEQ- ID, route to sequences
+            if (code.startsWith('SEQ-')) {
+              onSelectView('sequence-registry');
+            } else if (code.startsWith('SMP-')) {
+              onSelectView('samples');
+            } else {
+              alert(`Scanned Barcode: ${code}`);
+            }
+          }}
+          onClose={() => setIsScannerOpen(false)}
+        />
+      )}
     </header>
   );
 };

@@ -2,7 +2,6 @@ import logging
 from typing import List, Optional, Tuple
 from uuid import UUID
 
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.crud_project import project_repo
 from app.db.enums import ProjectStatus
@@ -58,7 +57,7 @@ class ProjectService:
             )
 
     async def create_project(
-        self, db: AsyncSession, *, obj_in: ProjectCreate, tenant_id: UUID, current_user: User
+        self, *, obj_in: ProjectCreate, tenant_id: UUID, current_user: User
     ) -> Project:
         """Create a new project ensuring code uniqueness."""
         code = getattr(obj_in, "project_code", "PRJ-001")
@@ -87,7 +86,7 @@ class ProjectService:
         return project
 
     async def get_project(
-        self, db: AsyncSession, *, project_id: UUID, tenant_id: UUID, include_details: bool = True
+        self, *, project_id: UUID, tenant_id: UUID, include_details: bool = True
     ) -> Project:
         """Fetch project by ID or raise ProjectNotFound."""
         project = await Project.find_one({"_id": project_id, "tenant_id": tenant_id, "is_deleted": False})
@@ -97,15 +96,13 @@ class ProjectService:
 
     async def update_project(
         self,
-        db: AsyncSession,
-        *,
-        project_id: UUID,
+        *, project_id: UUID,
         obj_in: ProjectUpdate,
         tenant_id: UUID,
         current_user: User
     ) -> Project:
         """Update project ensuring non-archived status and valid transitions."""
-        project = await self.get_project(db, project_id=project_id, tenant_id=tenant_id)
+        project = await self.get_project(project_id=project_id, tenant_id=tenant_id)
         if project.is_archived:
             raise ProjectArchivedError("Cannot update an archived project. Restore it first.")
 
@@ -125,10 +122,10 @@ class ProjectService:
         return project
 
     async def archive_project(
-        self, db: AsyncSession, *, project_id: UUID, tenant_id: UUID, current_user: User
+        self, *, project_id: UUID, tenant_id: UUID, current_user: User
     ) -> Project:
         """Archive a project."""
-        project = await self.get_project(db, project_id=project_id, tenant_id=tenant_id)
+        project = await self.get_project(project_id=project_id, tenant_id=tenant_id)
         if project.is_archived:
             return project
 
@@ -139,10 +136,10 @@ class ProjectService:
         return project
 
     async def restore_project(
-        self, db: AsyncSession, *, project_id: UUID, tenant_id: UUID, current_user: User
+        self, project_id: UUID, tenant_id: UUID, current_user: User
     ) -> Project:
         """Restore an archived project."""
-        project = await self.get_project(db, project_id=project_id, tenant_id=tenant_id)
+        project = await self.get_project(project_id=project_id, tenant_id=tenant_id)
         if not project.is_archived:
             return project
 
@@ -153,10 +150,10 @@ class ProjectService:
         return project
 
     async def delete_project(
-        self, db: AsyncSession, *, project_id: UUID, tenant_id: UUID, current_user: User
+        self, project_id: UUID, tenant_id: UUID, current_user: User
     ) -> bool:
         """Soft delete a project."""
-        project = await self.get_project(db, project_id=project_id, tenant_id=tenant_id)
+        project = await self.get_project(project_id=project_id, tenant_id=tenant_id)
         project.is_deleted = True
         project.updated_at = datetime.now(timezone.utc)
         await project.save()
@@ -165,34 +162,33 @@ class ProjectService:
 
     async def list_projects(
         self,
-        db: AsyncSession,
         *,
         tenant_id: UUID,
         filter_params: ProjectFilter,
-        pagination: ProjectPagination
-    ) -> Tuple[List[Project], int]:
+        pagination: ProjectPagination,
+        current_user: Optional[User] = None,
+    ) -> Tuple[List[dict], int]:
         """List projects with filtering and pagination."""
-        query_conditions = [
-            Project.tenant_id == tenant_id,
-            Project.is_deleted == False
-        ]
-        
-        if filter_params and filter_params.search:
-            from beanie.operators import RegEx
-            query_conditions.append(RegEx(Project.name, filter_params.search, "i"))
-            
-        if filter_params and filter_params.status:
-            query_conditions.append(Project.status == filter_params.status.value)
-            
-        total = await Project.find(*query_conditions).count()
-        skip = (pagination.page - 1) * pagination.page_size
-        items = await Project.find(*query_conditions).skip(skip).limit(pagination.page_size).to_list()
-        return items, total
+        return await project_repo.list_projects(
+            tenant_id=tenant_id, filter_params=filter_params, pagination=pagination
+        )
 
+    async def list_user_projects(
+        self, *, tenant_id: UUID, user_id: UUID, pagination: ProjectPagination
+    ) -> Tuple[List[dict], int]:
+        return await project_repo.list_by_owner(
+            tenant_id=tenant_id, owner_id=user_id, pagination=pagination
+        )
+
+    async def list_collaborator_projects(
+        self, *, tenant_id: UUID, user_id: UUID, pagination: ProjectPagination
+    ) -> Tuple[List[dict], int]:
+        return await project_repo.list_by_collaborator(
+            tenant_id=tenant_id, user_id=user_id, pagination=pagination
+        )
 
     async def add_collaborator(
         self,
-        db: AsyncSession,
         *,
         project_id: UUID,
         user_id: UUID,
@@ -200,14 +196,38 @@ class ProjectService:
         tenant_id: UUID,
         current_user: User
     ) -> ProjectCollaborator:
-        """Add a collaborator to a project."""
-        project = await self.get_project(db, project_id=project_id, tenant_id=tenant_id)
+        """Add a collaborator to a project and dispatch a real-time notification."""
+        project = await self.get_project(project_id=project_id, tenant_id=tenant_id)
         if project.is_archived:
             raise ProjectArchivedError("Cannot modify collaborators on an archived project.")
 
-        return await project_repo.add_collaborator(
-            db, project_id=project_id, user_id=user_id, role=role, added_by=current_user.id
+        collab = await project_repo.add_collaborator(
+            project_id=project_id, user_id=user_id, role=role, tenant_id=tenant_id, added_by=current_user.id
         )
+
+        # Notify the assigned researcher/collaborator in real time
+        try:
+            from app.services.notification_service import notification_service
+            sender_name = (
+                current_user.display_name
+                or f"{getattr(current_user, 'first_name', '')} {getattr(current_user, 'last_name', '')}".strip()
+                or current_user.username
+            )
+            await notification_service.create_notification(
+                tenant_id=tenant_id,
+                user_id=user_id,
+                title=f"Project Assigned: {project.name}",
+                message=f"{sender_name} assigned you to workspace '{project.name}' ({project.project_code}) as {role.capitalize()}.",
+                type="assignment",
+                entity_type="project",
+                entity_id=project.id,
+                sender_id=current_user.id,
+                sender_name=sender_name,
+            )
+        except Exception as e:
+            logger.warning(f"Failed to dispatch project assignment notification: {e}")
+
+        return collab
 
 
 project_service = ProjectService()

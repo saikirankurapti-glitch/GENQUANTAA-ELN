@@ -101,7 +101,7 @@ class ProtocolUpdate(BaseModel):
 class ProtocolRead(ProtocolBase):
     id: UUID = Field(..., description="Protocol unique identifier")
     tenant_id: UUID = Field(..., description="Tenant workspace identifier")
-    organization_id: UUID = Field(..., description="Organization identifier")
+    organization_id: Optional[UUID] = Field(None, description="Organization identifier")
     current_version: int = Field(1, description="Current version number")
     owner_id: Optional[UUID] = Field(None, description="Owner user identifier")
     reviewer_id: Optional[UUID] = Field(None, description="Reviewer user identifier")
