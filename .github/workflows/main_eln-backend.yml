@@ -53,4 +53,4 @@ jobs:
           app-name: 'eln-backend'
           slot-name: 'Production'
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_7E84CCB2ECDA441FA166D8E8EF042F39 }}
-          package: './backend'
+          package: '.'
