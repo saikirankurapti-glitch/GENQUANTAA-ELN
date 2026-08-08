@@ -123,6 +123,7 @@ app.add_middleware(
         "http://127.0.0.1:5173",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
+        "https://salmon-bay-0dd329d10.7.azurestaticapps.net",
     ],
     allow_credentials=True,
     allow_methods=["*"],
